@@ -1,95 +1,104 @@
 # NiñoRadar
 
-### Inteligencia satelital para comprender el impacto de las inundaciones
+### Satellite intelligence for understanding flood impacts
 
-Proyecto para la hackathon **NASA Space Apps Challenge 2026**, asociado al reto **Dancing with the SARs**, según el contexto del equipo. Repositorio: `hackathon_nasa`. Equipo mencionado en el documento complementario: **404 Gravity**.
+Prepared for **NASA Space Apps Challenge 2026**, associated with **Dancing with the SARs** according to the team's project narrative. Repository: `hackathon_nasa`. Team referenced by the supplementary document: **404 Gravity**.
 
-**Estado: preparación documental.** Este repositorio contiene contexto, alcance y reglas de trabajo. Todavía no contiene una aplicación, un pipeline SAR, datos descargados, integraciones probadas ni resultados científicos validados. El stack y el despliegue se decidirán después de investigar su viabilidad.
+**Status: documentation and agent setup.** The repository contains project context, scope, working rules and local research prompts. No application, SAR pipeline, selected stack, downloaded scenes, tested integrations or validated scientific results exist yet.
 
-## Qué buscamos resolver
+## Start here
 
-Las lluvias extremas y las inundaciones en Piura pueden afectar viviendas, carreteras, agricultura y servicios esenciales. La información territorial está distribuida entre distintas fuentes y la nubosidad limita la observación óptica.
+Every agent must first read the local [`context/START_HERE.md`](context/START_HERE.md), then follow its reading order. [`AGENTS.md`](AGENTS.md), [`CLAUDE.md`](CLAUDE.md) and [`GEMINI.md`](GEMINI.md) are tracked entry points to the same shared instructions. Agent discovery varies by tool; when an entry point is not loaded automatically, explicitly provide its path.
 
-NiñoRadar propone transformar observaciones SAR de la misión NISAR (NASA–ISRO) en mapas comprensibles de cambios en el agua superficial, cruzarlos con infraestructura y apoyar la priorización de evaluaciones en campo.
+`context/` and `prompts/` are intentionally ignored. They remain on this computer and are absent from fresh clones. Copy them through an authorized private channel before using another checkout. If private context is unavailable, report the missing context and use the tracked baseline without inventing local rules or past decisions.
 
-El piloto se concentra en **Catacaos y Cura Mori, Piura, Perú**. La expansión a otras zonas requiere datos adecuados y validación independiente.
+## Product purpose
 
-## Tres preguntas que guían el producto
+Extreme rainfall and flooding in Piura can affect homes, roads, agriculture and essential services. Information is distributed across sources, while cloud cover limits optical observation.
 
-1. **¿Dónde se ha extendido el agua?** Mostrar cambios compatibles con inundación entre observaciones comparables.
-2. **¿Qué podría estar siendo afectado?** Estimar intersecciones con vías, edificaciones y áreas agrícolas, según las capas disponibles.
-3. **¿Dónde conviene priorizar la evaluación?** Mostrar sectores propuestos para verificación con reglas explicables e incertidumbre visible.
+NiñoRadar proposes converting SAR observations from the NASA–ISRO NISAR mission into understandable maps of surface-water change, intersecting these with infrastructure and supporting prioritization of field assessments.
 
-## MVP previsto
+The pilot is **Catacaos and Cura Mori, Piura, Peru**. Expansion requires suitable observations and separate validation.
 
-| Capacidad | Resultado esperado | Condición previa |
+1. **Where has water expanded?** Show changes consistent with flooding between comparable observations.
+2. **What might be affected?** Estimate intersections with roads, buildings and agricultural land where appropriate cartography exists.
+3. **Where should verification be prioritized?** Explain proposed sectors using transparent rules and visible uncertainty.
+
+## Planned MVP
+
+| Capability | Expected result | Prerequisite |
 | --- | --- | --- |
-| Mapa de detección | Comparación antes/después y extensión de agua detectada | Pareja SAR comparable y método documentado |
-| Mapa de exposición | Segmentos viales y áreas agrícolas potencialmente expuestos; edificaciones si existe una capa adecuada | Cartografía con cobertura, fecha y licencia conocidas |
-| Panel territorial | Superficie en ha/km², longitud vial en km y sectores para verificar | Cálculos reproducibles y metadatos de calidad |
+| Detection map | Before/after comparison and detected water extent | Comparable SAR pair and documented method |
+| Exposure map | Potentially exposed road segments and agricultural areas; buildings if suitable data exists | Known coverage, source date and license |
+| Territorial dashboard | Detected area in ha/km², road length in km and sectors proposed for verification | Reproducible calculations and quality metadata |
 
-Flujo conceptual: **observación satelital → detección de cambios → cruce territorial → visualización y apoyo a la evaluación**. Estas capacidades son objetivos, no funcionalidades ya implementadas.
+Conceptual flow: **satellite observation → change detection → territorial intersection → visualization and assessment support**.
 
-## Cómo interpretar los resultados futuros
+Detected water is preliminary evidence. Potential exposure does not confirm damage, road closure, safe access, water depth or casualties. Always distinguish acquisition dates, missing coverage and uncertainty. NISAR is the primary mission; historical Sentinel-1 must be identified as another mission. Results must not be presented as real-time flood detection.
 
-- Una máscara de agua es una **estimación preliminar**, no una confirmación de daños.
-- Una vía que intersecta la máscara está **potencialmente expuesta**; la intersección no acredita corte, transitabilidad ni ruta segura.
-- Las adquisiciones tienen fecha, cobertura y limitaciones. La aplicación no debe presentar la detección como tiempo real.
-- NISAR es la misión principal. Sentinel-1 puede apoyar una validación histórica, siempre rotulado como otra misión.
-- No inferir profundidad, velocidad del agua, víctimas ni causalidad climática únicamente a partir de retrodispersión SAR.
-- El producto complementa a las instituciones; las decisiones oficiales corresponden a sus responsables.
+## Sources and scope
 
-## Fuentes y prioridad del contexto
+1. [Source narrative in English](docs/SOURCE_CONTEXT.md): translated from the owner's original attachment; authoritative product commitments.
+2. [Team research document](https://docs.google.com/document/d/10_RmLBz5asZoEUewSKRS8kkQ9_lA0bDfm1piiPGLaHs/edit?tab=t.flskznlxd0bg): supplementary research read on November 14, 2026.
+3. Primary documentation and reproducible evidence: required before claiming technical capabilities or results.
 
-1. [Texto principal íntegro](docs/CONTEXTO_FUENTE.md): copia del adjunto proporcionado por el usuario; define producto, piloto y límites.
-2. [Google Docs del equipo](https://docs.google.com/document/d/10_RmLBz5asZoEUewSKRS8kkQ9_lA0bDfm1piiPGLaHs/edit?tab=t.flskznlxd0bg): investigación complementaria, consultada el 14 de noviembre de 2026.
-3. Documentación primaria y evidencia reproducible: necesarias para verificar datos, herramientas, cobertura y rendimiento antes de implementar.
+The supplement also proposes Tumbes, forecasts and brigade coordination. Those ideas do not automatically expand the MVP. See [sources and decisions](docs/SOURCES_AND_DECISIONS.md) and [scope and validation](docs/SCOPE_AND_VALIDATION.md).
 
-El Google Docs propone también Piura/Tumbes, pronósticos, asignación de verificaciones y reportes de brigadas. Esas ideas **no amplían automáticamente el MVP**: véase la [conciliación de fuentes](docs/FUENTES_Y_DECISIONES.md).
-
-## Contenido del repositorio
+## Repository structure
 
 ```text
 hackathon_nasa/
 ├── .gitattributes
 ├── .gitignore
 ├── AGENTS.md
+├── CLAUDE.md
+├── GEMINI.md
 ├── CONTRIBUTING.md
 ├── README.md
 ├── docs/
-│   ├── CONTEXTO_FUENTE.md
-│   ├── ALCANCE_Y_VALIDACION.md
-│   └── FUENTES_Y_DECISIONES.md
-└── prompts/                         # Solo local; excluido de Git
-    ├── 01_logica_y_refactor_visual.md
-    ├── 02_investigacion_arquitectura.md
-    └── 03_investigacion_ux_ui_ar_gemelos.md
+│   ├── SOURCE_CONTEXT.md
+│   ├── SCOPE_AND_VALIDATION.md
+│   └── SOURCES_AND_DECISIONS.md
+├── context/                              # Local, ignored
+│   ├── START_HERE.md
+│   ├── RULES.md
+│   ├── PROJECT.md
+│   ├── WORKING_STATE.md
+│   ├── KNOWLEDGE.md
+│   ├── MAINTENANCE.md
+│   └── skills/
+│       ├── technology-research/
+│       └── adversarial-qa/
+└── prompts/                              # Local, ignored
+    ├── 01_product_logic_and_visual_refactor.md
+    ├── 02_architecture_research.md
+    └── 03_ux_ui_ar_and_digital_twins_research.md
 ```
 
-## Cómo usar los prompts locales
+## Local prompts and skills
 
-Los tres archivos son autocontenidos: incluyen el texto principal íntegro, el complemento delimitado, instrucciones de trabajo y entregables verificables. Se pueden copiar completos a otra IA sin acceso al Google Docs ni a los otros prompts.
+Each prompt is self-contained, in English, and includes the complete translated narrative, reconciled supplementary context, tasks, deliverables and acceptance criteria. Read the private context first when working in this repository; copied prompts can also be used independently.
 
-| Archivo local | Encargo | Modo de trabajo |
-| --- | --- | --- |
-| `prompts/01_logica_y_refactor_visual.md` | Nueva lógica, flujos, contratos de presentación y refactor visual | Auditar y planificar primero; ejecutar cuando se solicite implementar |
-| `prompts/02_investigacion_arquitectura.md` | Datos SAR, implementación, escalabilidad, concurrencia, latencia y errores | Investigar y producir un plan técnico reproducible |
-| `prompts/03_investigacion_ux_ui_ar_gemelos.md` | UX/UI geoespacial, animaciones, AR y gemelos digitales | Investigar, comparar y especificar una experiencia viable |
+| Prompt | Assignment |
+| --- | --- |
+| `01_product_logic_and_visual_refactor.md` | Product logic, workflows, presentation contracts and visual refactor |
+| `02_architecture_research.md` | SAR data, architecture, scalability, concurrency, response time and failures |
+| `03_ux_ui_ar_and_digital_twins_research.md` | Geospatial UX/UI, animation, interactive AR and digital twins |
 
-Orden sugerido para reducir retrabajo: investigar arquitectura y UX/UI; luego integrar decisiones en el encargo de lógica/refactor. También pueden usarse por separado: las decisiones ajenas que falten se registran como pendientes.
+Run architecture and UX research before integrating their decisions into the implementation plan. Analysis is the default; implement only when the accompanying request asks for it.
 
-`prompts/` no se publica, no tiene commits y no aparecerá al clonar. Para mover los prompts a otro equipo hay que copiarlos por un canal privado autorizado. Las investigaciones futuras pueden guardarse en `docs/investigacion/`; esta carpeta todavía no existe.
+The local **technology-research** skill covers project reconnaissance, current alternatives, technical evaluation, isolated feasibility checks, ADRs and review triggers. The **adversarial-qa** skill covers independent adversarial review, mandatory property-based testing for executable logic, malformed-input fuzzing, failure minimization and reproducibility. These are portable skill packages, not globally installed agent extensions.
 
-## Próximos pasos
+## Working requirements
 
-1. Verificar las reglas vigentes del reto y localizar una pareja NISAR comparable sobre el piloto; registrar IDs y metadatos.
-2. Revisar cartografía de vías, agricultura y límites distritales, con licencias y fechas.
-3. Evaluar un método base SAR y una referencia independiente, sin prometer precisión no medida.
-4. Elegir arquitectura y experiencia 2D antes de comprometer AR, simulaciones o coordinación operativa.
-5. Implementar el MVP por incrementos verificables, conservando la procedencia de cada resultado.
+- **English throughout:** code, comments, documentation, filenames, directories, commits, UX/UI and research outputs. Preserve proper names and external identifiers.
+- **One tracked path per commit:** stage and inspect one file at a time. Renames use deletion and addition commits; do not squash multiple files together.
+- **Private context:** never force-add `context/` or `prompts/`, or publish their contents indirectly.
+- **Evidence before adoption:** novelty, stars and vendor claims do not establish superiority. Include migration cost, ecosystem fit and no-new-dependency alternatives.
+- **Adversarial assurance:** derive invariants from contracts, generate unusual inputs, minimize failures and retain reproducible evidence. Do not claim tests or research that were not executed.
 
-Consultar [alcance y validación](docs/ALCANCE_Y_VALIDACION.md) y [reglas de contribución](CONTRIBUTING.md). Desde este setup, **cada commit debe modificar un solo archivo versionado**. Los prompts permanecen ignorados; no usar `git add -f` para incluirlos.
+See [contribution requirements](CONTRIBUTING.md). Proposed future research outputs may go in `docs/research/`; create that folder only when producing those outputs.
 
-## Licencias y atribuciones
+## License and attribution
 
-La licencia del código del proyecto queda pendiente de decisión del equipo. El repositorio es privado y no se concede aquí una licencia abierta. Cada dataset, mapa base, biblioteca y recurso visual conservará su propia licencia y atribución. Participar en NASA Space Apps no implica respaldo institucional de NASA, ISRO u organismos peruanos.
+The code license is undecided. The private repository does not grant an open-source license. Preserve each dataset, map, library and visual asset's terms and attribution. NASA Space Apps participation does not imply institutional endorsement by NASA, ISRO or Peruvian agencies.

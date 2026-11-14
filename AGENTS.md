@@ -17,6 +17,8 @@ The `context/` and `prompts/` directories are local and Git-ignored. They are ab
 
 Read [`README.md`](README.md), [`docs/SOURCE_CONTEXT.md`](docs/SOURCE_CONTEXT.md), [`docs/SCOPE_AND_VALIDATION.md`](docs/SCOPE_AND_VALIDATION.md) and [`docs/SOURCES_AND_DECISIONS.md`](docs/SOURCES_AND_DECISIONS.md).
 
+The owner has requested a defined stack. Read [`docs/SAR_FOUNDATIONS.md`](docs/SAR_FOUNDATIONS.md), [`docs/TECHNOLOGY_STACK.md`](docs/TECHNOLOGY_STACK.md) and [`ADR 0001`](docs/decisions/0001-technology-stack.md). Use the selected Python/API/GCOV and MindAR/A-Frame/Gemini baseline and pinned manifests; amend an ADR if verified evidence requires a change. Dependency resolution is not runtime/scientific validation. Do not add pyroSAR/ISCE or replace the frontend merely because a generic software list mentions them.
+
 The current solution is RAÍZ-SAR AI. The latest attachment and explicit owner corrections supersede the earlier NiñoRadar flood-exposure pilot and optional-AR scope. Focus on suitable vegetation/root reinforcement as a contribution to erosion and huaico-risk reduction, with Carabayllo and lower Piura/Sechura scenario locators. Verify boundaries and ecological/geotechnical relevance rather than assuming suitability.
 
 An interactive geospatial map with actual AR and AI-assisted construction of future planting scenarios are mandatory product requirements. An accessible 2D/3D fallback does not replace them. The drone extension deposits seeds/capsules; it does not merely capture images or establish mature roots instantly.

@@ -158,6 +158,7 @@ class SarProcessBody(BaseModel):
     scenario_id: str
     source: str = Field(default="synthetic", max_length=200)
     acquisition: str = Field(default="baseline", pattern=r"^(baseline|post_rainfall)$")
+    granule_url: str | None = Field(default=None, max_length=400)
 
 
 class SarDiscoverBody(BaseModel):

@@ -114,6 +114,44 @@ def test_inline_schema_has_no_refs():
     assert "$ref" not in text and "$defs" not in text
 
 
+def _required_props_exist(node):
+    if isinstance(node, dict):
+        for name in node.get("required", []):
+            assert name in node.get("properties", {}), f"required property '{name}' missing"
+        for v in node.values():
+            _required_props_exist(v)
+    elif isinstance(node, list):
+        for v in node:
+            _required_props_exist(v)
+
+
+def test_inline_schema_keeps_property_named_title():
+    """Regression from actual Gemini inference (HTTP 400): annotation stripping removed the
+    'title' property, leaving 'required: [title]' unsatisfiable."""
+    from raiz_sar.contracts import AIReportSections, AIScenePlan
+    from raiz_sar.ai_provider import inline_schema
+
+    for model in (AIScenePlan, AIReportSections):
+        schema = inline_schema(model.model_json_schema())
+        _required_props_exist(schema)
+    assert "title" in inline_schema(AIScenePlan.model_json_schema())["properties"]
+    # Provider rejects array-length keywords; they must be absent from the sent schema...
+    assert "minItems" not in json.dumps(inline_schema(AIScenePlan.model_json_schema()))
+
+
+def test_array_lengths_still_enforced_after_generation():
+    """...while Pydantic validation still rejects outputs with the wrong number of stages."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+    from raiz_sar.contracts import AIScenePlan
+
+    plan, ds = _plan()
+    doc = json.loads(fixture_scene_responder(build_prompt(scene_context(plan, ds)), {}))
+    doc["stages"] = doc["stages"][:3]
+    with _pytest.raises(ValidationError):
+        AIScenePlan.model_validate(doc)
+
+
 def test_fixture_provider_is_labeled():
     f = ai_provider.FixtureProvider(lambda p, s: "{}")
     g = f.generate_json("s", "p", {})

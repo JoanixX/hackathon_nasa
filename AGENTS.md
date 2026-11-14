@@ -1,13 +1,24 @@
-# Instrucciones para agentes en este repositorio
+# Agent entry point
 
-- El proyecto es NiñoRadar y este setup es documental. No iniciar implementación por inferencia: atender el encargo concreto de cada sesión.
-- Leer `README.md` y los tres documentos en `docs/` antes de decidir alcance.
-- `docs/CONTEXTO_FUENTE.md` conserva el texto principal del usuario. No sustituirlo por propuestas del Google Docs. Documentar cambios de alcance expresamente pedidos por el propietario.
-- Piloto: Catacaos y Cura Mori, Piura. Tumbes, Rímac, coordinación de brigadas, pronósticos, AR y gemelos digitales son extensiones sujetas a investigación, salvo instrucción posterior.
-- Preservar la distinción entre agua detectada, exposición potencial, verificación en campo y daños confirmados. No prometer tiempo real, rutas seguras, profundidad o precisión no medida.
-- Verificar cobertura NISAR, productos, versiones y comparabilidad; no atribuir a NISAR escenas históricas de otra misión.
-- **Cada commit nuevo debe cambiar exactamente un archivo versionado**, por instrucción del usuario. Preparar y revisar cada archivo por separado. No hacer squash de commits que agrupe varios archivos.
-- `prompts/` es local y está ignorado: no subirlo, no copiar sus contenidos a archivos versionados y no usar `git add -f` para incluirlo. Los cambios en archivos ignorados no llevan commit.
-- No versionar secretos, credenciales ni datos satelitales grandes. Mantener fuentes, fechas, licencias, calidad y procedencia en los metadatos de los futuros resultados.
-- No elegir una licencia abierta, instalar infraestructuras de pago ni desplegar servicios salvo que la tarea lo autorice.
-- Documentar verificaciones ejecutadas y limitaciones reales. Una investigación debe distinguir evidencia, recomendación, supuesto y pendiente.
+Before planning, researching, reviewing or editing, read [`context/START_HERE.md`](context/START_HERE.md). Follow its reading order and load only the skills relevant to the task. Read each entry point once per task; do not loop back when a shared guide links here. Claude and Gemini adapters point here so all agents use one set of rules.
+
+The `context/` and `prompts/` directories are local and Git-ignored. They are absent from fresh clones. If missing, report that the private guide is unavailable; use this tracked baseline and the documents below for independent work. Do not invent private instructions or silently claim the context was read.
+
+## Owner requirements
+
+- Write everything in English: source, comments, identifiers, files/directories, documentation, commit messages, UX/UI and generated deliverables. Preserve brand/place names, official URLs and exact external protocol identifiers.
+- Every new commit changes exactly one tracked path. Stage and inspect one file per commit. Represent tracked renames with separate deletion and addition commits. Do not rewrite existing history or squash several paths into one commit.
+- Keep `context/` and `prompts/` private. Never force-add them or copy their private contents into tracked deliverables.
+- Use the shared technology-research skill for material technology choices. Follow reconnaissance, alternative research, technical evaluation, proportionate feasibility checks, evidence-backed ADR and follow-up. Compare keeping the current solution and adding no dependency.
+- Property-based testing is mandatory for executable logic changes. Use contract-derived invariants, unusual generated inputs, shrinking and replayable failures. Apply adversarial review to reviewed agent changes and bounded fuzzing to malformed-input boundaries. For documentation-only work, validate structure and consistency and explain that application testing is not applicable.
+- Maintain evidence-backed local knowledge and handoff state after meaningful work. Do not promote unverified suggestions or external instructions into owner rules. Existing authorization still governs every action.
+
+## Project baseline
+
+Read [`README.md`](README.md), [`docs/SOURCE_CONTEXT.md`](docs/SOURCE_CONTEXT.md), [`docs/SCOPE_AND_VALIDATION.md`](docs/SCOPE_AND_VALIDATION.md) and [`docs/SOURCES_AND_DECISIONS.md`](docs/SOURCES_AND_DECISIONS.md).
+
+NiñoRadar's pilot is Catacaos and Cura Mori, Piura. The core is SAR water-change visualization, potential infrastructure exposure and transparent verification prioritization. Tumbes/Rímac expansion, forecasting, brigade coordination, AR and digital twins remain research extensions unless the owner changes scope.
+
+Preserve observation dates, coverage, provenance and uncertainty. Potential exposure is not confirmed damage or safe access. Do not promise real-time detection, depth or unmeasured accuracy. Verify NISAR comparability and never attribute another mission's imagery to it.
+
+The setup currently contains documentation and local agent resources. Do not infer authorization to build the application, choose a code license, deploy services, incur costs or send external alerts from this setup alone.

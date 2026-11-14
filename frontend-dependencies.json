@@ -1,0 +1,57 @@
+{
+  "status": "Selected baseline; packages, CDN delivery and target-device integration not installed or runtime-tested.",
+  "research_date": "2026-11-14",
+  "application_entry_point": "index.html",
+  "node_tooling_major": 22,
+  "dependencies": {
+    "leaflet": {
+      "version": "1.9.4",
+      "role": "2D evidence map",
+      "evidence": "https://raw.githubusercontent.com/Leaflet/Leaflet/v1.9.4/package.json"
+    },
+    "chart.js": {
+      "version": "4.6.1",
+      "role": "Unit-aware charts",
+      "evidence": "https://cdn.jsdelivr.net/npm/chart.js/package.json"
+    },
+    "@tailwindcss/browser": {
+      "version": "4.3.5",
+      "role": "Development-only browser CSS compiler",
+      "evidence": "https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.3.5"
+    },
+    "lucide": {
+      "version": "1.73.0",
+      "role": "SVG icons",
+      "evidence": "https://github.com/lucide-icons/lucide/releases/tag/1.73.0"
+    },
+    "aframe": {
+      "version": "1.6.0",
+      "role": "Interactive scene assembly and bundled three.js",
+      "evidence": "https://hiukim.github.io/mind-ar-js-doc/quick-start/overview/"
+    },
+    "mind-ar": {
+      "version": "1.2.5",
+      "role": "Image-target camera AR",
+      "evidence": "https://hiukim.github.io/mind-ar-js-doc/quick-start/overview/"
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": {
+      "version": "1.65.1",
+      "role": "Browser interaction QA",
+      "evidence": "https://github.com/microsoft/playwright/releases/tag/v1.65.1"
+    },
+    "fast-check": {
+      "version": "4.10.2",
+      "role": "JavaScript property-based testing",
+      "evidence": "https://github.com/dubzzz/fast-check/releases/tag/v4.10.2"
+    }
+  },
+  "constraints": [
+    "Do not use floating latest CDN versions.",
+    "Verify package availability and asset hashes before release; no SRI values are invented here.",
+    "Use AFRAME.THREE; do not inject a second global three.js.",
+    "Compile Tailwind CSS for production.",
+    "Actual camera tracking and real AI inference remain separate acceptance gates."
+  ]
+}

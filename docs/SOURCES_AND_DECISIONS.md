@@ -49,6 +49,13 @@ Detailed technical investigations remain future work. No scene download, soil-mo
 6. Replace unsupported source certainty with traceable evidence classes, sensitivity scenarios and explicit unknowns. Do not change the prevention goal into a flood-only viewer.
 7. Keep `context/` and `prompts/` ignored; one tracked path per new commit. Preserve existing untracked `docs/research/` files.
 8. Keep deliverables in English and conversational replies in Spanish, following the recorded later owner preference. Proper names and external identifiers remain exact.
+9. The owner's subsequent stack-definition request is resolved by [TECHNOLOGY_STACK.md](TECHNOLOGY_STACK.md), [SAR_FOUNDATIONS.md](SAR_FOUNDATIONS.md), pinned manifests and [ADR 0001](decisions/0001-technology-stack.md). Do not treat earlier requests to choose tools as an instruction to reopen the selected baseline without evidence.
+
+## SAR guide and stack evidence added
+
+The owner supplied [NASA Earthdata's SAR introduction](https://www.earthdata.nasa.gov/learn/earth-observation-data-basics/sar). Its Data Availability table was inspected directly in the browser after an automated reader returned 403. Relevant Python-oriented entries include pyroSAR, PyRAT and ISCE; each was compared with the actual GCOV product-level need rather than added indiscriminately.
+
+Current primary product/tool documentation, official PyPI metadata and frontend release documentation were checked on November 14, 2026. The selected Python 3.12/Linux binary-wheel dry-run resolved 88 packages without installing them. The resolver ran on Windows/Python 3.11, so actual target environment markers, imports and native ABI remain an implementation gate. No runtime benchmark, scene processing, inference, service or camera test was performed. See the stack/ADR for exact sources, model access limitations and frontend artifact checks still pending.
 
 ## Research questions that must be answered
 

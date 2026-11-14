@@ -1,7 +1,8 @@
-# Prompts personales: mantener exclusivamente en local.
+# Private agent context and prompts: local only.
+/context/
 /prompts/
 
-# Credenciales y configuración privada.
+# Credentials and private configuration.
 .env
 .env.*
 !.env.example
@@ -10,7 +11,7 @@
 .netrc
 secrets/
 
-# Datos satelitales, cachés y productos generados (publicar solo muestras autorizadas).
+# Satellite data, caches and generated products; publish only authorized samples.
 /data/
 /artifacts/
 /outputs/
@@ -21,7 +22,7 @@ secrets/
 *.tiff
 *.nc
 
-# Entornos y dependencias.
+# Environments and dependencies.
 .venv/
 venv/
 __pycache__/
@@ -36,7 +37,7 @@ build/
 .turbo/
 coverage/
 
-# Archivos locales y del sistema.
+# Local and operating-system files.
 .local/
 *.log
 *.tmp

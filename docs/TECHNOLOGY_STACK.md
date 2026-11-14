@@ -97,6 +97,20 @@ Prepare ignored local directories for original data, derived artifacts and logs;
 
 The selected stack is concrete. Integration/scientific validity remains to be demonstrated rather than implied by dependency resolution.
 
+## Implementation verification — November 14, 2026
+
+The first implementation exercised the stack on the target runtime; details and gate status are in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+
+- **Runtime:** `python:3.12-slim-bookworm@sha256:935c3c5b…` (CPython 3.12.16). The [Dockerfile](../Dockerfile) installs from the lock with `--require-hashes`. All 19 direct imports succeed; Rasterio reports GDAL 3.12.2 with HDF5, COG and PNG drivers.
+- **System dependency:** the Rasterio 1.5.2 manylinux wheel needs the system `libexpat1` on the slim image. This is an image detail, not a library change.
+- **Lock:** regenerated inside the target image (86 packages). The earlier Windows-hosted snapshot included Windows-only `colorama`/`tzdata` and a different `cryptography` wheel.
+- **Queue:** Valkey `8.1.11@sha256:8f836008…` with RQ 3.0.0; API, SAR worker and AI worker run as separate Compose services on port 8765 by default.
+- **AI SDK:** google-genai 3.3.0 exposes `response_json_schema`, `seed` and `HttpOptions.timeout`, as used by the adapter. No actual inference yet (no key).
+- **AR:** MindAR 1.2.5 compiled the target and tracked it with A-Frame 1.6.0 (`AFRAME.THREE`, no second three.js) through the camera pipeline using a recorded target video. Physical-device testing remains.
+- **JS tooling:** `@playwright/test` 1.65.1 and fast-check 4.10.2 exist on the registry mirror (jsDelivr), but this network resets connections to registry.npmjs.org, so the local run used Playwright 1.64.1 and fast-check's jsDelivr ESM build. No stack change is implied.
+
+No component was replaced, so ADR 0001 stands; its follow-up section records these checks.
+
 ## Required next implementation checks
 
 Run target-environment lock regeneration and imports; a tiny synthetic HDF5 → masked array → georeferenced raster → polygon intersection test; a real local NISAR product inspection; worker restart/idempotency checks; one actual structured Gemini response; and one image-target AR session on declared hardware. Then run contract-based Hypothesis/fast-check campaigns and bounded malformed-GeoJSON/AI/scene fuzzing. Use independent references for science and do not count software tests as ecological validation.

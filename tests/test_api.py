@@ -143,6 +143,23 @@ def test_synthetic_sar_processing_is_labeled(acq):
     assert m["rvi_status"].startswith("not_computed")
 
 
+@pytest.mark.parametrize("url", [
+    "https://evil.example.com/NISAR_L2_PR_GCOV_X.h5",
+    "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/x/../../etc/passwd",
+    "http://nisar.asf.earthdatacloud.nasa.gov/NISAR/a/NISAR_L2_PR_GCOV_X.h5",
+])
+def test_granule_download_only_from_official_host(url):
+    st_ = client.post("/api/sar/process", json={"scenario_id": "carabayllo-rio-seco", "granule_url": url}).json()
+    assert st_["state"] == "failed" and st_["error_code"] == "invalid_input"
+
+
+def test_granule_download_without_credentials_is_reported():
+    url = ("https://nisar.asf.earthdatacloud.nasa.gov/NISAR/NISAR_L2_GCOV_V1/NISAR_L2_PR_GCOV_TEST/"
+           "NISAR_L2_PR_GCOV_034_083_D_094_2005_DHDH_M_TEST.h5")
+    st_ = client.post("/api/sar/process", json={"scenario_id": "carabayllo-rio-seco", "granule_url": url}).json()
+    assert st_["state"] == "failed" and st_["error_code"] == "earthdata_credentials_missing"
+
+
 def test_sar_real_path_must_stay_in_data_dir():
     st_ = client.post("/api/sar/process", json={"scenario_id": "lower-piura-sechura", "source": "../../etc/passwd.h5"}).json()
     assert st_["state"] == "failed" and st_["error_code"] == "invalid_input"

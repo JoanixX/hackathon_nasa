@@ -1,0 +1,19 @@
+# Selected direct runtime dependencies; CPython 3.12 Linux baseline.
+# See docs/TECHNOLOGY_STACK.md for roles and verification limits.
+fastapi==0.163.0
+uvicorn==0.54.0
+pydantic==2.14.3
+sqlalchemy==2.1.8
+rq==3.0.0
+redis==8.1.0
+httpx==0.28.1
+google-genai==3.3.0
+asf-search==14.1.0
+earthaccess==0.19.0
+h5py==3.16.0
+numpy==2.5.4
+scipy==1.18.1
+rasterio==1.5.2
+geopandas==1.2.0
+shapely==2.2.0
+pyproj==3.8.0

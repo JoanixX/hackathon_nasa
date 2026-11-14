@@ -54,6 +54,10 @@ Implement contracts/fixtures first, verify actual AR/AI seams early, then ingest
 
 If binary-library compatibility fails, regenerate a consistent Conda-forge target environment. If an AR pair/model becomes incompatible/unavailable, record failure evidence and amend this ADR with a tested replacement. Switching a model/provider does not change scientific truth or permit new data sharing automatically.
 
+## Follow-up — implementation check, November 14, 2026
+
+The selected components were installed and exercised on the target image; no evidence required replacing any of them. Recorded adjustments are operational: the slim Python image needs `libexpat1` for the Rasterio wheel, the hashed lock was regenerated on the target, and the API publishes on port 8765 by default because 8000 was occupied locally. Actual Gemini inference, real GCOV inspection and physical-device AR remain open gates; see [implementation status](../IMPLEMENTATION_STATUS.md).
+
 ## Review triggers
 
 Revisit on unsupported Python/binary dependencies, security advisories, model retirement/terms changes, failed target-device registration, measured queue/DB contention, a new raw/InSAR requirement or multi-host deployment. A newer release, more stars or an attractive demo alone does not justify changing the stack. No code-license decision or infrastructure deployment is authorized by this ADR.

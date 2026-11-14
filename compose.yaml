@@ -1,0 +1,51 @@
+# Single-host pilot: API, separate SAR and AI/report workers, and Valkey.
+# Start with: docker compose up --build   (then open http://localhost:8765; override with RAIZ_PORT)
+x-app: &app
+  build: .
+  image: raiz-sar-ai:dev
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    RAIZ_VALKEY_URL: redis://valkey:6379/0
+    RAIZ_RUNTIME_DIR: /app/.local/runtime
+    RAIZ_DATA_DIR: /app/data
+    RAIZ_AI_PROVIDER: ${RAIZ_AI_PROVIDER:-gemini}
+  volumes:
+    - ./:/app
+  depends_on:
+    valkey:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  valkey:
+    image: valkey/valkey:8.1.11@sha256:8f836008e0986c36adf50da714c7060cf689dbb335f61fe077939d90fa650809
+    command: ["valkey-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: ["uvicorn", "raiz_sar.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:${RAIZ_PORT:-8765}:8000"
+
+  worker-sar:
+    <<: *app
+    command: ["python", "-m", "raiz_sar.worker", "sar"]
+    mem_limit: 2g
+
+  worker-ai:
+    <<: *app
+    command: ["python", "-m", "raiz_sar.worker", "ai"]
+    mem_limit: 768m
+
+volumes:
+  valkey-data:

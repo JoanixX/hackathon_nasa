@@ -100,6 +100,41 @@ def _safe_data_path(rel: str) -> Path:
     return p
 
 
+ASF_NISAR_PREFIX = "https://nisar.asf.earthdatacloud.nasa.gov/NISAR/"
+
+
+def _download_granule(url: str) -> Path:
+    """Authorized download of one NISAR GCOV granule from the official ASF host into data/gcov/."""
+    import re
+    import shutil
+
+    from .sar.discovery import download_granule
+
+    name = url.rsplit("/", 1)[-1]
+    if not url.startswith(ASF_NISAR_PREFIX) or not re.fullmatch(r"NISAR_L2_[A-Z0-9_]+\.h5", name):
+        raise JobFailure("invalid_input", "Only NISAR L2 .h5 granules from the official ASF host can be downloaded.")
+    s = get_settings()
+    dest = s.data_dir / "gcov"
+    target = dest / name
+    if target.exists() and target.stat().st_size > 0:
+        return target  # idempotent: reuse a completed download
+    if not (s.earthdata_username and s.earthdata_password):
+        raise JobFailure("earthdata_credentials_missing",
+                         "Set EARTHDATA_USERNAME and EARTHDATA_PASSWORD in .env and restart the stack.")
+    dest.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(dest).free < 10 * 1024**3:
+        raise JobFailure("disk_space", "Less than 10 GB free in the data directory.")
+    try:
+        got = download_granule(url, dest, s.earthdata_username, s.earthdata_password)
+    except PermissionError as exc:
+        raise JobFailure("earthdata_credentials_missing", str(exc)) from exc
+    except Exception as exc:  # authentication/network failures are reported, not simulated
+        raise JobFailure("download_failed", f"{type(exc).__name__}: {str(exc)[:250]}") from exc
+    if got.name != name:
+        got.replace(target)
+    return target
+
+
 @handler("sar_process")
 def sar_process_job(inputs: dict[str, Any]) -> str:
     from .sar.pipeline import process_gcov
@@ -107,7 +142,9 @@ def sar_process_job(inputs: dict[str, Any]) -> str:
 
     scenario = get_scenario(inputs["scenario_id"])
     s = get_settings()
-    if inputs["source"] == "synthetic":
+    if inputs.get("granule_url"):
+        path = _download_granule(inputs["granule_url"])
+    elif inputs["source"] == "synthetic":
         acq = inputs.get("acquisition", "baseline")
         path = s.runtime_dir / "synthetic" / f"{inputs['scenario_id']}_{acq}.h5"
         write_synthetic_gcov(path, scenario, acq)

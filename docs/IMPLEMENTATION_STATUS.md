@@ -25,7 +25,7 @@
 | RZ-05 Eligible planting plan | Met | Exclusions and unknown slope are applied before allocation; properties verify excluded sectors never receive capsules |
 | RZ-06 Consistent quantities and budget | Met | Integer centimos; seeds = capsules × seeds per capsule; established ≤ germinated ≤ seeds; property-tested |
 | RZ-07 Required interactive AR | **Partially met** | MindAR 1.2.5 + A-Frame 1.6.0 tracked the printed target from real camera frames (Chromium fake camera fed with a recorded video): target found 2.4 s after start, tracking loss hides overlays, reacquisition, horizon change, zone inspection, camera released on exit, permission denial reported. **Pending:** a recorded session on a physical device (desktop webcam and Android Chrome over HTTPS) |
-| RZ-08 AI future-state construction | **Blocked on credentials** | Gemini adapter (google-genai 3.3.0, `response_json_schema`, seed, timeout), validation, repair attempt and deterministic assembly implemented and tested with a fake SDK client. No `GEMINI_API_KEY` is configured, so no actual inference has run; the UI shows "AI: blocked" and fixture scenes are labeled "FIXTURE — not actual AI inference" |
+| RZ-08 AI future-state construction | **Met (actual inference)** | With the owner's server-side key: `/api/ai/selftest` returned a schema-valid, correct answer from `gemini-3.8-flash` (3.9 s). Scenes for both scenarios were generated through the AI queue, validated and assembled (Carabayllo response `wNb4auWFEZau0_gPus6z-Qs`, 16.6 s; lower Piura `29b4atO5KuaYiLMPvfHgkQs`, 18.6 s). In both cases the validator rejected the first model output and the repair attempt passed. Not yet shown on a physical AR device |
 | RZ-09 Distinct present and future | Met | Separate colours, labels, map layers and AR layers for evidence, proposal and future; month 0 shows seeds only |
 | RZ-10 Correct drone extension | Met | Seed/capsule deposition nodes and sorties bounded by payload and route limit; status always `candidate_plan_incomplete`, `execution: not_executed`; unverified constraints listed |
 | RZ-11 Grounded report and printing | Met (narrative AI blocked) | Draft label, sources, dates, units, coordinates, limitations and authorship per statement; print stylesheet. Without a key the report is `partial` with deterministic sections only |
@@ -81,14 +81,14 @@ Final run: `python -m pytest tests --hypothesis-show-statistics` in the target i
 | dB round-trip oracle overflowed at float max (`1.79769313e+308`) | Test-oracle defect | Log-domain oracle; minimized case kept as regression |
 | GIS mutators crashed after `null_props` / `point_geom` | Test-harness defect | Destructive mutations ordered last; null-properties regression added |
 | `vm`-context arrays fail strict `deepEqual` | Test-harness defect | Length-based assertion |
+| Actual Gemini calls returned HTTP 400 for the scene schema | Reproduced integration defect (found by real inference) | Annotation stripping removed the property named `title` (unsatisfiable `required`); bisection showed `gemini-3.8-flash` rejects `minItems`/`maxItems`. The sent schema keeps property names and omits array-length keywords; Pydantic still enforces lengths. Regressions added |
 | npm reported `@playwright/test@1.65.1` as non-existent | Network artifact, not a stack defect | Debug log shows `ECONNRESET` to registry.npmjs.org and stale cache; jsDelivr lists 1.65.1. Local QA used Playwright 1.64.1 (npx cache) and fast-check 4.10.2 from jsDelivr's ESM build. Re-run `npm install` on an unrestricted network |
 
 ## Blocked gates and the exact inputs needed
 
-1. **Actual AI (RZ-08):** a server-side `GEMINI_API_KEY` with access to `gemini-3.8-flash` in `.env`, then `POST /api/ai/selftest` and one scene generation. Account terms, quota and retention must be accepted by the owner.
-2. **Real GCOV (RZ-03):** Earthdata login on the server, or one downloaded granule from the listed results placed in `data/`, then `POST /api/sar/process` with its relative path. Carabayllo's listed granule is single-pol (`SHSH`), so HV/RVI will be unavailable there.
-3. **Physical-device AR (RZ-07):** a printed target and a webcam (localhost) or an Android phone reaching the server over HTTPS (for example `uvicorn --ssl-keyfile/--ssl-certfile` with a locally trusted certificate).
-4. **Science:** DEM-derived slope, surveyed boundaries, specialist species/density values and field references; none is claimed.
+1. **Real GCOV (RZ-03):** `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` in `.env` (an Earthdata Login account), then **Search NISAR catalog → Download & process** in the UI. Downloads are restricted to `https://nisar.asf.earthdatacloud.nasa.gov/NISAR/` `.h5` granules and reused once complete. Alternatively place a downloaded `.h5` in `data/` and call `POST /api/sar/process` with its relative path. Prefer a `DHDH` granule (HH+HV); `SHSH` granules are single-pol.
+2. **Physical-device AR (RZ-07):** a printed target and a webcam (localhost) or an Android phone reaching the server over HTTPS (for example `uvicorn --ssl-keyfile/--ssl-certfile` with a locally trusted certificate).
+3. **Science:** DEM-derived slope, surveyed boundaries, specialist species/density values and field references; none is claimed.
 
 ## Known limitations
 

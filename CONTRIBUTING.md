@@ -1,4 +1,4 @@
-# Contributing to NiñoRadar
+# Contributing to RAÍZ-SAR AI
 
 ## Read first
 

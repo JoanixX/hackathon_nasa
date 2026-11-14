@@ -6,7 +6,7 @@ The `context/` and `prompts/` directories are local and Git-ignored. They are ab
 
 ## Owner requirements
 
-- Write everything in English: source, comments, identifiers, files/directories, documentation, commit messages, UX/UI and generated deliverables. Preserve brand/place names, official URLs and exact external protocol identifiers.
+- Write deliverables in English: source, comments, identifiers, files/directories, documentation, commit messages, UX/UI and generated artifacts. Conversational replies are in Spanish following the later recorded owner preference. Preserve brand/place names, official URLs and exact external protocol identifiers.
 - Every new commit changes exactly one tracked path. Stage and inspect one file per commit. Represent tracked renames with separate deletion and addition commits. Do not rewrite existing history or squash several paths into one commit.
 - Keep `context/` and `prompts/` private. Never force-add them or copy their private contents into tracked deliverables.
 - Use the shared technology-research skill for material technology choices. Follow reconnaissance, alternative research, technical evaluation, proportionate feasibility checks, evidence-backed ADR and follow-up. Compare keeping the current solution and adding no dependency.
@@ -17,8 +17,12 @@ The `context/` and `prompts/` directories are local and Git-ignored. They are ab
 
 Read [`README.md`](README.md), [`docs/SOURCE_CONTEXT.md`](docs/SOURCE_CONTEXT.md), [`docs/SCOPE_AND_VALIDATION.md`](docs/SCOPE_AND_VALIDATION.md) and [`docs/SOURCES_AND_DECISIONS.md`](docs/SOURCES_AND_DECISIONS.md).
 
-NiñoRadar's pilot is Catacaos and Cura Mori, Piura. The core is SAR water-change visualization, potential infrastructure exposure and transparent verification prioritization. Tumbes/Rímac expansion, forecasting, brigade coordination, AR and digital twins remain research extensions unless the owner changes scope.
+The current solution is RAÍZ-SAR AI. The latest attachment and explicit owner corrections supersede the earlier NiñoRadar flood-exposure pilot and optional-AR scope. Focus on suitable vegetation/root reinforcement as a contribution to erosion and huaico-risk reduction, with Carabayllo and lower Piura/Sechura scenario locators. Verify boundaries and ecological/geotechnical relevance rather than assuming suitability.
 
-Preserve observation dates, coverage, provenance and uncertainty. Potential exposure is not confirmed damage or safe access. Do not promise real-time detection, depth or unmeasured accuracy. Verify NISAR comparability and never attribute another mission's imagery to it.
+An interactive geospatial map with actual AR and AI-assisted construction of future planting scenarios are mandatory product requirements. An accessible 2D/3D fallback does not replace them. The drone extension deposits seeds/capsules; it does not merely capture images or establish mature roots instantly.
+
+Preserve observation dates, coverage, provenance, evidence class and uncertainty. NISAR backscatter does not automatically measure hidden water depth, survival probability or root stability. Check actual band/polarization availability, including any S-band claim over Peru. A generated future scene is a scenario, not a validated prediction or observed future. Never promise universally preventing huaicos, instant slope reinforcement or unmeasured benefits.
+
+Preserve the source's single-index.html demonstrator target while researching real AR/AI dependencies and credential-safe integration explicitly. Existing untracked research is historical background: preserve it and do not stage it merely because this task updates the active solution.
 
 The setup currently contains documentation and local agent resources. Do not infer authorization to build the application, choose a code license, deploy services, incur costs or send external alerts from this setup alone.

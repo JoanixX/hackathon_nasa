@@ -76,9 +76,15 @@ def inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
                 return walk(copy.deepcopy(defs[name]), depth + 1)
             out = {}
             for k, v in node.items():
-                if k in ("$defs", "title", "default"):
+                # minItems/maxItems are rejected by gemini-3.8-flash (HTTP 400, verified 2026-11-14 by
+                # bisection). Array lengths are still enforced by Pydantic after generation.
+                if k in ("$defs", "title", "default", "minItems", "maxItems"):
                     continue
-                out[k] = walk(v, depth + 1)
+                if k == "properties" and isinstance(v, dict):
+                    # Keys here are property NAMES (a field may be called "title"); keep them all.
+                    out[k] = {name: walk(sub, depth + 1) for name, sub in v.items()}
+                else:
+                    out[k] = walk(v, depth + 1)
             return out
         if isinstance(node, list):
             return [walk(x, depth + 1) for x in node]

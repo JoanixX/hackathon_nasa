@@ -96,7 +96,7 @@ def _enqueue(job_id: str, queue: str) -> None:
     from rq import Queue
 
     conn = Redis.from_url(s.valkey_url, socket_timeout=5, socket_connect_timeout=3)
-    q = Queue(queue, connection=conn, default_timeout=900)
+    q = Queue(queue, connection=conn, default_timeout=7200 if queue == "sar" else 900)
     # Only this fixed function is ever enqueued, with a job-id string argument (no client callables).
     q.enqueue("raiz_sar.tasks.execute", job_id, job_id=f"rq-{job_id}-{int(time.time() * 1000)}",
               result_ttl=3600, failure_ttl=86400)
@@ -220,7 +220,8 @@ def run(job_id: str) -> str:
     cur = get(job_id)
     if cur is None or cur.state != "queued":
         return cur.state if cur else "missing"
-    lease = int(time.time()) + s.job_lease_s
+    # Granule downloads (1-7 GB) need a longer lease than AI jobs; the reaper must not requeue them mid-download.
+    lease = int(time.time()) + s.job_lease_s * (24 if cur.kind == "sar_process" else 1)
     if not transition(job_id, "queued", "running", attempts=cur.attempts + 1, lease_expires_at=lease):
         return get(job_id).state
     from . import tasks  # noqa: F401  (registers handlers)

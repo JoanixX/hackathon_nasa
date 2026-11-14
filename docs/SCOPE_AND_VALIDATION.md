@@ -22,9 +22,9 @@ AR remains core even when a fallback is provided. Drone planting is an extension
 
 ## Prototype packaging
 
-The attached source asks for a single `index.html` frontend using HTML5, Tailwind CDN, Leaflet, Chart.js and an icon library. Treat these as prototype constraints to evaluate. Specify any additional AR runtime and why it is needed. Research conflicts between file-based preview, network dependencies, HTTPS/camera requirements and actual AI access. Never expose a private provider key to satisfy a single-file constraint.
+The attached source asks for a single `index.html` frontend using HTML5, Tailwind CDN, Leaflet, Chart.js and icons. [The selected stack](TECHNOLOGY_STACK.md) now resolves the baseline: MindAR/A-Frame image-tracked AR, a Python API/worker pipeline, server-side structured Gemini generation and pinned dependency manifests. Verify implementation conflicts between file-based preview, network dependencies, HTTPS/camera requirements and actual AI access. Never expose a private provider key to satisfy a single-file constraint.
 
-A fixture-only demo, a prototype with actual AI/AR integration and a maintainable production system are distinct delivery modes. A simulated inference response may support development but does not prove the actual AI requirement was completed. No code is being built in this task.
+A fixture-only demo, a prototype with actual AI/AR integration and a maintainable production system are distinct delivery modes. A simulated inference response may support development but does not prove the actual AI requirement was completed. The stack definition and dependency-resolution snapshot are not an implemented application or runtime integration test.
 
 ## Canonical domain objects to investigate
 

@@ -27,4 +27,4 @@ Preserve observation dates, coverage, provenance, evidence class and uncertainty
 
 Preserve the source's single-index.html demonstrator target while researching real AR/AI dependencies and credential-safe integration explicitly. Existing untracked research is historical background: preserve it and do not stage it merely because this task updates the active solution.
 
-The setup currently contains documentation and local agent resources. Do not infer authorization to build the application, choose a code license, deploy services, incur costs or send external alerts from this setup alone.
+The repository now contains a locally runnable implementation (see [`README.md`](README.md) and [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)). Keep fixture, real and blocked gates distinct. Do not infer authorization to choose a code license, deploy services, incur costs, operate drones or send external alerts.

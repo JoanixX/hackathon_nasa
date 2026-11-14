@@ -1,5 +1,5 @@
 {
-  "status": "Selected baseline; packages, CDN delivery and target-device integration not installed or runtime-tested.",
+  "status": "Runtime pins loaded from jsDelivr by index.html and exercised in Chromium on 2026-11-14 (map, charts, icons, A-Frame 1.6.0, MindAR 1.2.5 camera tracking on recorded frames). Physical-device AR and SRI hashes pending; local npm QA install blocked by registry connection resets on this network.",
   "research_date": "2026-11-14",
   "application_entry_point": "index.html",
   "node_tooling_major": 22,

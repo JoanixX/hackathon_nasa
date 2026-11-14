@@ -610,7 +610,8 @@
   $("sar-toggle").addEventListener("change", renderSar);
   $("sar-term").addEventListener("change", renderSar);
 
-  async function runJob(kind, path, body, statusEl, onDone, tokenKind) {
+  async function runJob(kind, path, body, statusEl, onDone, tokenKind, timeoutMs) {
+    const limitMs = timeoutMs || 240000;
     // Scene/report results are bound to the plan on screen; SAR jobs are not plan-dependent.
     const planBound = kind === "scene" || kind === "report";
     const tok = guard.issue(tokenKind || kind, state.planVersion);
@@ -623,7 +624,7 @@
     }
     let attempt = 0;
     const started = Date.now();
-    while (!C.JOB_TERMINAL.has(st.state) && Date.now() - started < 240000) {
+    while (!C.JOB_TERMINAL.has(st.state) && Date.now() - started < limitMs) {
       statusEl.textContent = "Job " + st.job_id + ": " + st.state + "…";
       await new Promise((r) => setTimeout(r, C.backoffDelay(attempt++)));
       if (!guard.accept(tok, current())) return null;
@@ -633,7 +634,7 @@
       statusEl.textContent = "Discarded a stale result from a previous plan version.";
       return null;
     }
-    if (!C.JOB_TERMINAL.has(st.state)) { statusEl.textContent = "Still " + st.state + " after 4 minutes; check again later."; return st; }
+    if (!C.JOB_TERMINAL.has(st.state)) { statusEl.textContent = "Still " + st.state + " after " + Math.round(limitMs / 60000) + " minutes; check again later."; return st; }
     statusEl.textContent = "Job " + st.job_id + ": " + st.state + (st.error_code ? " (" + st.error_code + ": " + (st.error_message || "") + ")" : "");
     onDone(st);
     return st;
@@ -654,12 +655,23 @@
       const r = st.result;
       if (!r) return;
       const list = el("ul", { class: "mt-1" });
-      for (const it of r.results.slice(0, 6)) {
-        list.append(el("li", {}, (it.granule_id || "?") + " · " + (it.start_time_utc || "?") + " · mode " + (it.polarization_mode_from_name || "unknown") +
-          (it.h5_bytes ? " · " + (it.h5_bytes / 1e9).toFixed(2) + " GB" : "")));
+      const dl = el("div", { class: "mt-1", "aria-live": "polite" });
+      for (const it of r.results.slice(0, 8)) {
+        const btn = el("button", { class: "btn", type: "button", title: "Download this granule with the server's Earthdata login and derive the AOI layers" }, "Download & process");
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          dl.textContent = "Downloading " + (it.h5_bytes ? (it.h5_bytes / 1e9).toFixed(2) + " GB" : "granule") + " on the server… this can take several minutes.";
+          await runJob("sar", "/api/sar/process", { scenario_id: state.scenarioId, granule_url: it.url }, dl, () => {}, "sar-real", 7200000);
+          btn.disabled = false;
+          await loadEvidence();
+          $("sar-toggle").checked = true; setPhase("post_rainfall");
+        });
+        list.append(el("li", { class: "mb-1" }, (it.start_time_utc || "?") + " · mode " + (it.polarization_mode_from_name || "unknown") +
+          (it.polarization_mode_from_name && it.polarization_mode_from_name.startsWith("S") ? " (single-pol: no HV)" : "") +
+          (it.h5_bytes ? " · " + (it.h5_bytes / 1e9).toFixed(2) + " GB " : " "), btn));
       }
-      card.replaceChildren(el("div", {}, "Catalog discovery: " + r.count + " NISAR GCOV granule(s) intersect the AOI (" + r.query.start + " to " + r.query.end + "). Nothing was downloaded or processed."), list,
-        el("div", { class: "muted" }, "Download needs Earthdata credentials on the server; place a GCOV .h5 in the data directory to process it."));
+      card.replaceChildren(el("div", {}, "Catalog discovery: " + r.count + " NISAR GCOV granule(s) intersect the AOI (" + r.query.start + " to " + r.query.end + "). Nothing is downloaded until you choose one."), list, dl,
+        el("div", { class: "muted" }, (state.health && state.health.earthdata_configured) ? "Earthdata login is configured on the server." : "Earthdata login is NOT configured: set EARTHDATA_USERNAME and EARTHDATA_PASSWORD in .env and restart."));
     }, "discover");
   });
 

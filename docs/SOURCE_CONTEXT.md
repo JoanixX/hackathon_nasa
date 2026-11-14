@@ -134,3 +134,13 @@ SAR vegetation change does not confirm that roots anchor a slope at 6–12 month
 Revise three self-contained English prompts: product logic/visual refactor; architecture/science/implementation research; and UX/UI/AR/AI future-state research. Keep them local and ignored. Update active project documentation and shared context to remove the superseded flood-only and optional-AR instructions. Preserve existing research as dated background without adopting its recommendations automatically.
 
 No application, calibrated moisture model, species prescription, actual drone route, AR session, AI-generated future scene or validated prevention result is claimed by this documentation update.
+
+## 10. Subsequent owner request — Defined SAR and application stack
+
+The owner subsequently asked to incorporate [NASA Earthdata's SAR guide](https://www.earthdata.nasa.gov/learn/earth-observation-data-basics/sar), examine its Python-oriented processing references, and define the stack. This resolves earlier open-ended technology selection while preserving the product requirements above.
+
+Selected baseline: Python 3.12; FastAPI/Uvicorn/Pydantic; RQ with Valkey; SQLAlchemy/SQLite pilot metadata; asf_search and earthaccess; h5py/NumPy/SciPy/Rasterio/GeoPandas/Shapely/pyproj for product-level GCOV analysis; native HTML/JavaScript with Leaflet, Chart.js, Tailwind and Lucide; MindAR 1.2.5 with A-Frame 1.6.0 for actual image-tracked AR; and server-side Google Gen AI structured generation using default `gemini-3.8-flash`, validated before deterministic scene assembly. Use Hypothesis/pytest and fast-check/Playwright for executable QA.
+
+pyroSAR, PyRAT and ISCE are evaluated tools, not automatic core dependencies. The chosen scientific path consumes already-corrected GCOV; raw focusing/InSAR requires a separate demonstrated need. Camera-free 3D remains a fallback, and heuristic/fixture output does not count as actual AI. A single HTML frontend does not contain backend credentials or do heavy HDF5 processing.
+
+The exact versions and evidence are maintained in the stack specification, dependency manifests and ADR. Selected does not mean installed, runtime-tested or scientifically validated. A changed dependency or model requires a justified ADR amendment rather than silently replacing this baseline.

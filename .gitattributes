@@ -1,4 +1,4 @@
-# Documentación consistente entre Windows, Linux y herramientas de IA.
+# Consistent text files across Windows, Linux and agent tools.
 *.md text eol=lf
 .gitignore text eol=lf
 .gitattributes text eol=lf

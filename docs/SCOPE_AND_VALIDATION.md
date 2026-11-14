@@ -1,87 +1,80 @@
-# NiñoRadar scope, contracts, and validation
+# RAÍZ-SAR AI — Scope and validation contract
 
-Prepared on November 14, 2026. This document translates the project narrative into working criteria. It does not establish an implemented system or a selected architecture.
+Current scope follows the latest [solution source](SOURCE_CONTEXT.md), including the owner's four binding corrections. Prepared November 14, 2026. This is a specification and research setup, not an implemented application.
 
-## Users and primary task
+## Product outcome
 
-Potential users include municipalities, regional governments, risk management institutions, humanitarian teams, researchers, and communities. The initial design hypothesis is a municipal territorial analyst comparing observations, examining exposure, and selecting sectors for field verification. Interviews are still required; these roles have not been validated through user research.
+Support an environmental/GIS specialist and a municipal planner evaluating vegetation establishment for erosion control and appropriate slope reinforcement, with NISAR-derived evidence where defensible, a transparent planting plan and **required AI-assisted future-state AR**. Avoid claims of universally preventing huaicos or instant reinforcement from newly dispersed seeds.
 
-## Priorities
+## Priorities and dependencies
 
-| Priority | Work | Required evidence |
+| Priority | Required outcome | Dependency |
 | --- | --- | --- |
-| P0: MVP | Catacaos/Cura Mori, SAR comparison, road/agricultural exposure, dashboard, uncertainty | Comparable observations, documented methodology and provenance |
-| P1: after the core | Exports, stronger accessibility, validation samples, improved low-connectivity states | Demonstrated utility and documented limits |
-| P2: research | Tumbes/Rímac, forecasts, field reports, synchronization, AR, digital twins | A specific use case, suitable data, cost analysis and separate validation |
+| Core | Scenario selectors for Carabayllo and lower Piura/Sechura, evidence map, sector detail and discrete timeline | Verified locators/boundaries or labeled fixtures |
+| Core | Candidate planting suitability and budget/establishment scenarios | Ecological/geotechnical eligibility, explicit assumptions and evidence quality |
+| Core | Interactive AR linked to the selected geospatial sector | Declared supported device, registration, scale/datum and meaningful interaction |
+| Core | Actual AI-assisted construction of a future planting scenario for AR | Model/inference path, schema validation, versioned plan and scene assembly |
+| Core | Grounded printable planning draft and GIS-import contract | Provenance, report constraints and compatible normalized data |
+| Extension | Drone seed/capsule deposition planning | Species/seed feasibility, payload, terrain, energy and authorized operational constraints |
+| Later validation | Plant establishment and possible erosion/slope benefits | Independent field records and suitable long-term specialist evaluation |
 
-An idea's priority does not establish its feasibility. This setup builds documentation and agent resources only.
+AR remains core even when a fallback is provided. Drone planting is an extension with an explicitly defined seed-deposition purpose. A lack of field validation must downgrade claims, not erase the mandatory product requirements.
 
-## Minimum future demonstration
+## Prototype packaging
 
-1. Select the study area and two observations with visible mission, acquisition time and coverage.
-2. Check comparability; explain invalid combinations and prevent misleading comparisons.
-3. Distinguish reference water, detected changes, exclusions and missing observations.
-4. Enable infrastructure layers and inspect intersecting features.
-5. Select a sector and inspect indicators, evidence, limitations and reasons for its proposed priority.
+The attached source asks for a single `index.html` frontend using HTML5, Tailwind CDN, Leaflet, Chart.js and an icon library. Treat these as prototype constraints to evaluate. Specify any additional AR runtime and why it is needed. Research conflicts between file-based preview, network dependencies, HTTPS/camera requirements and actual AI access. Never expose a private provider key to satisfy a single-file constraint.
 
-## Proposed minimum data contract
+A fixture-only demo, a prototype with actual AI/AR integration and a maintainable production system are distinct delivery modes. A simulated inference response may support development but does not prove the actual AI requirement was completed. No code is being built in this task.
 
-The final schema will follow architecture research. Preserve at least:
+## Canonical domain objects to investigate
 
-- **Identity:** observation/product ID, provider, mission, collection, processing level and version.
-- **Time:** acquisition, publication when known, ingestion and processing in UTC; display Peru time with an explicit timezone. Represent unknown times as unknown.
-- **Geometry:** AOI, CRS, resolution, extent, units, nodata, quality masks and valid coverage.
-- **Method:** algorithm version, parameters, inputs, comparability checks and warnings.
-- **Result:** masks/classes and quality states; numeric confidence only with a justified meaning and calibration.
-- **Provenance:** URL, license/terms, attribution and checksum where appropriate.
-- **Exposure:** feature ID, source layer/date, intersection type, computed area/length and originating analysis ID.
+`StudyArea`, `Sector`, `Observation`, `EvidenceLayer`, `FieldAssessment`, `SpeciesCandidate`, `PlantingPlan`, `BudgetScenario`, `DroneSeedingPlan`, `EstablishmentScenario`, `FutureSceneSpecification`, `ARSession` and `PlanningDraft`.
 
-Obtain district boundaries from a documented cartographic source and verify CRS and administrative identifiers. Do not invent boundary coordinates or measure hectares and road lengths directly in angular degrees.
+Every derived object needs input IDs/versions, applicable AOI, temporal context, units, method/parameter version, evidence class and uncertainty. Use separate evidence classes for `observed`, `derived`, `modeled`, `ai_generated`, `illustrative` and `unknown`; a derived/model result is only validated when an independent verification record supports that status.
 
-## Future MVP acceptance criteria
+## Acceptance criteria for later implementation
 
-| ID | Criterion | Expected verification |
+| ID | Criterion | Verification |
 | --- | --- | --- |
-| MVP-01 | Pilot limited to Catacaos and Cura Mori | AOI geometry and source documented |
-| MVP-02 | Valid observation comparison | Mission, product, times, geometry and version recorded |
-| MVP-03 | Water, change and unavailable observation distinguished | Legend and cases for nodata, exclusions and permanent water |
-| MVP-04 | Reproducible exposure | Verified intersections without duplicate geometry counts |
-| MVP-05 | Correct units | Suitable metric CRS or verified geodesic calculations |
-| MVP-06 | Responsible communication | Visible dates, source, uncertainty and potential-exposure wording |
-| MVP-07 | Understandable failures | Missing pair, missing coverage, unavailable provider and partial result states |
-| MVP-08 | Honest demonstration | Real, historical and simulated resources labeled; correct mission attribution |
-| MVP-09 | Reproducibility | Inputs, versions and parameters sufficient to regenerate a result |
-| MVP-10 | Accessible English interface | Keyboard navigation, contrast, English microcopy and a textual map alternative |
+| RZ-01 | New prevention-oriented identity and scope | Active UI/docs use RAÍZ-SAR AI and the corrected source |
+| RZ-02 | Both scenario locations | Locator provenance; boundaries and data mode labeled |
+| RZ-03 | Essential analytical NISAR contribution | Input IDs, band/polarization/quality and meaningful derived evidence; no logo-only integration |
+| RZ-04 | Honest science | No unvalidated underground-depth, survival or root-stability claims; unknown values remain unknown |
+| RZ-05 | Eligible planting plan | Exclusions before ranking; species/soil/terrain constraints and assumptions inspectable |
+| RZ-06 | Consistent quantities and budget | Seeds/capsules, expected germination, established plants and costs remain distinct |
+| RZ-07 | Required interactive AR | Recorded interaction on a declared supported device, with scale/registration checks |
+| RZ-08 | AI future-state construction | Real inference trace or explicit blocked status, valid scenario schema, deterministic constraints and interactive AR scene |
+| RZ-09 | Distinct present and future | Observation versus proposal versus generated scenario never visually conflated |
+| RZ-10 | Correct drone extension | Seeds/capsules deposited; planned/ simulated route distinguished from executed flight |
+| RZ-11 | Grounded report and printing | Draft label, source dates/units, limitations, no official-approval claim |
+| RZ-12 | Compatible GIS import | Normalized English schema, geometry/unit checks and actionable errors |
+| RZ-13 | Accessible English UX | Keyboard/text alternative, readable contrast, reduced motion and useful AR fallback |
+| RZ-14 | Reproducible software assurance | Property tests, unusual inputs, shrinking/replay and bounded fuzzing for executable boundaries |
 
-## Scientific validation still required
+RZ-07 and RZ-08 are separate gates: a 3D viewer is not automatically AR; a deterministic vegetation placement routine is not automatically AI. Unavailable inference or unsupported hardware must appear as an unresolved gate, not a completed requirement.
 
-Compare a baseline method with independent, contemporaneous references when available. Report precision, recall, F1 and IoU with class definitions, sample sizes, dates and limitations. Separate tuning and evaluation by time and space to avoid leakage. Do not treat the model's own mask as independent ground truth or claim an unmeasured accuracy percentage.
+## Science and ecological evidence gates
 
-Investigate false positives and negatives in rice fields, wet soil, permanent water, urban areas, vegetation, radar shadow and acquisition geometry. Floods predating NISAR cannot be presented as observed by that mission. Historical Sentinel-1 may support methodology validation with explicit mission attribution.
+1. Verify an appropriate NISAR sequence over a proposed location, available channels, collection maturity and comparability. L-band availability does not prove S-band coverage over Peru.
+2. Define what the SAR method can estimate and validate against appropriately timed independent measurements. GCOV backscatter is not a direct subsurface-water measurement.
+3. Inspect DEM source, horizontal/vertical datum, slope derivation, hazards and field context. A slope percentage is not a geotechnical stability certification.
+4. Verify candidate taxa, native range, establishment requirements and seed-based deployment suitability. Dry-forest restoration and slope-bioengineering cases need different assumptions.
+5. Define monitoring for deposition, germination, establishment and maintenance. Root contribution develops over time and may be insufficient for the hazard mechanism.
+6. Only estimate survival, carbon, erosion reduction or sediment effects with a documented model and evidence; otherwise provide clearly labeled sensitivity scenarios or no estimate.
 
-A road intersecting a mask has potential exposure; that does not establish accessibility. Building intersections do not confirm occupancy or damage. Prioritization must disclose rules and uncertainty and must not imply validated casualty probability or rescue instructions.
+## AI, AR and drone checks
 
-## Software assurance requirements
+- Ground AI input in the selected evidence/plan version; validate structured outputs, reject unsupported species/geometry and treat imported text as untrusted data.
+- Keep scene construction constrained to approved sectors, terrain/datum, species assets and time assumptions. Root geometry and future vegetation are illustrative unless independently established.
+- Handle denied camera/location permission, tracking loss, wrong marker, stale plan, unit/datum mismatch and device limits. Hide misleading field alignment when registration quality is insufficient.
+- Enforce candidate drone routes within verified constraints; no-go areas and energy reserve precede distance optimization. If constraints are unknown, mark the plan incomplete. No actual flight or device actuation is authorized.
 
-Executable logic changes require contract-derived property-based testing, including valid, invalid and boundary input generation, shrinking and reproducible failure artifacts. Reviewers must challenge another agent's implementation independently when reviewing its work. Malformed-input boundaries require bounded fuzzing with documented limits and replayable corpora. Example-based regression tests remain useful after a generated failure is minimized.
+## Reproducibility and testing
 
-These are requirements for future implementation. This repository currently has no application test suite, executed application fuzzing campaign or measured application coverage. Documentation-only changes receive structural, consistency and link validation rather than fabricated application tests. The detailed workflows live in the local `context/` skills.
+For executable changes, property-based testing is mandatory. Target coordinate round-trips with justified tolerance; nonnegative budget/counts; no seed/tree conflation; candidate points within eligible areas; exclusion preservation; legal state transitions; stale-response rejection; scene/report/version consistency; and unknown evidence that cannot silently become high confidence.
 
-## Performance and operation still to be measured
+Generate thousands of valid, invalid and boundary cases within explicit budgets, shrink failures and keep replay artifacts. Fuzz malformed GeoJSON, report/AI payloads and scene/import schemas in isolated bounded harnesses. No application/property tests or fuzzing are claimed for the current documentation-only work.
 
-Set separate objectives for read APIs, initial map rendering, exposure queries and SAR processing. Include data volume, concurrency, hardware/network, cold/warm cache, percentiles and error rates. There are no measured service-level guarantees, load tests or deployed services yet.
+## Timebox and actual team
 
-Evaluate heavy SAR processing as asynchronous work. A fast interface response does not make the observation recent. Distinguish orbital revisit, publication latency, computation time and application response time.
-
-## Open risks and decisions
-
-| Risk or decision | Research action | Fallback if unresolved |
-| --- | --- | --- |
-| No comparable NISAR pair | Search catalog and inspect product metadata | Disclose limitation; historical other-mission demo or labeled simulation |
-| Incomplete/outdated cartography | Check coverage, terms and local samples | Restrict indicators to known coverage |
-| No independent reference | Seek contemporaneous products or expert interpretation | Exploratory study without operational accuracy claims |
-| API access unavailable | Test authorized access and actual formats | Traceable manual import; automated integration remains pending |
-| UI/3D appears more precise than data | Compare visualization scale with source resolution | Restrict depiction and communicate uncertainty |
-| Undefined budget/environment | Measure a small crop and estimate explicit scenarios | Simple architecture and precomputed artifacts |
-
-AR, digital twins, forecasting, brigade dispatch and external alerts require additional research. They do not block demonstration of the core prototype.
+Plan a 48-hour vertical slice with an environmental engineer validating GIS/ecological assumptions, a systems engineer owning data/contracts/AI and a systems engineer owning map/UI/AR. Roles may be combined according to skills; make integration checkpoints explicit. Freeze evidence/plan/scene contracts early and test the AR hardware and AI path early rather than deferring both mandatory gates to the final hours.

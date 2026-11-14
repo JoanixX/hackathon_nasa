@@ -1,40 +1,52 @@
-# Cómo trabajar en NiñoRadar
+# Contributing to NiñoRadar
 
-## Leer antes de cambiar
+## Read first
 
-Revisar `README.md`, `docs/CONTEXTO_FUENTE.md`, `docs/ALCANCE_Y_VALIDACION.md` y `docs/FUENTES_Y_DECISIONES.md`. El texto adjunto define el alcance; el Google Docs es complementario. Registrar qué es requisito, propuesta, hipótesis o resultado verificado.
+Read the local `context/START_HERE.md`, then `AGENTS.md` and the project documents it references. Use the same context regardless of agent vendor. Report missing private context explicitly; it is intentionally excluded from clones.
 
-## Un commit por archivo
+## English throughout
 
-Por instrucción del propietario, **cada commit nuevo debe cambiar exactamente un archivo versionado**, incluso cuando varios archivos correspondan a la misma tarea. No agruparlos en un commit ni hacer squash de varios archivos. Usar mensajes que expliquen el cambio.
+Use English in source code, comments, variables, files/directories, documentation, commit messages, user-facing copy, errors, accessibility labels, empty states and research artifacts. Preserve proper names, official source URLs and external API/protocol identifiers. Translate explanatory text around them. Existing historical commits are retained.
 
-Ejemplo para cambios futuros, ejecutando y revisando cada paso:
+## Exactly one tracked path per commit
+
+The owner requires each new commit to change one tracked path. Stage and inspect each file separately:
 
 ```powershell
 git add -- README.md
-git diff --cached --name-only
+git diff --cached --name-status
 git diff --cached
-git commit -m "docs: actualizar contexto de NiñoRadar"
+git commit -m "docs: update the project overview"
 ```
 
-Antes de confirmar, `git diff --cached --name-only` debe mostrar solo el archivo previsto. Repetir el proceso para cada archivo. Evitar `git add .` y `git commit -a`. Las renombradas deben revisarse expresamente por cómo Git representa el cambio. No alterar commits publicados para reorganizar el historial.
+The staged path list must contain exactly the intended file before committing. Avoid `git add .` and `git commit -a`. Do not squash commits that affect different paths. Publish with a fast-forward update and verify the remote branch afterward.
 
-La excepción son los archivos ignorados: no llevan commit. `prompts/` permanece exclusivamente en local; nunca usar `git add -f` para publicarlo. Comprobarlo con `git check-ignore -v prompts/01_logica_y_refactor_visual.md`.
+To rename a tracked file while keeping this rule, commit its old-path deletion separately from its new-path addition. Explain the relocation in both English commit messages. Preserve the old history; temporary broken references between those two commits must be resolved in the completed change set.
 
-## Investigación y documentación
+Ignored files are not committed. `context/` and `prompts/` stay local; never use `git add -f` to include them or publish their contents through another file. Check with:
 
-- Preferir documentación oficial y papers para hechos técnicos. Incluir URL, fecha de consulta, producto/versión y evidencia concreta.
-- Marcar como pendiente todo acceso, descarga, prueba o benchmark que no se haya ejecutado.
-- Registrar decisiones con alternativas, motivos, coste, límites y condición de revisión.
-- No ampliar territorio ni capacidades del MVP porque aparezcan como ideas futuras en otra fuente.
-- Mantener coherentes documentación, nombres de campos, unidades y etiquetas visibles.
+```powershell
+git check-ignore -v -- context/START_HERE.md prompts/01_product_logic_and_visual_refactor.md
+```
 
-## Datos y secretos
+## Research and decisions
 
-No versionar credenciales, archivos `.env`, tokens Earthdata, datos personales de brigadas ni escenas/rasters grandes. Los directorios `data/`, `outputs/`, `artifacts/` y `.local/` están ignorados. Guardar en documentación metadatos, enlaces de descarga, checksum y licencia, cuando estén disponibles. Redistribuir muestras solo con derechos comprobados.
+Use the local technology-research skill when choosing material backend/frontend tools. Inspect the project first, research current primary sources and evaluate security, performance, scaling, ergonomics, maintenance, cost, portability and complexity. Include migration and rollback costs and the complete ecosystem. Compare retaining the current approach and adding no dependency.
 
-## Validación proporcional
+Run a small isolated feasibility check when it resolves a material uncertainty. Document an ADR with alternatives, evidence, decision, trade-offs, versions, research date, obsolescence risks and review triggers. Popularity and novelty are signals, not decision proofs. Vendor capability documentation is not independent performance evidence.
 
-Para documentación: comprobar enlaces internos, términos, coherencia y ausencia de afirmaciones de implementación no verificadas. Para código futuro: ejecutar los checks existentes y pruebas relevantes de ciencia, geometría, contratos, accesibilidad o errores según el cambio. No presentar un build exitoso como validación científica.
+## Adversarial assurance
 
-Antes de publicar: revisar `git status`, el archivo de cada commit y que no se incluya `prompts/`. Hacer push sin `--force` y comprobar que la rama remota coincide con el resultado esperado.
+For executable logic changes, property-based testing is mandatory. Define invariants from requirements and independent models, generate valid/invalid/boundary inputs, shrink failures and retain seeds or replay artifacts. Use thousands of unusual cases within explicit time, memory and input-size budgets.
+
+Review another agent's changes with an adversarial mindset: try to falsify assumptions and produce minimal reproducible failures. Fuzz relevant malformed-input boundaries in isolation, including timeout, memory and state-corruption behavior. Larger campaigns require an explicit recorded budget. Do not fuzz production or third-party services without authorization.
+
+For documentation-only changes, validate links, names, instructions, source fidelity and ignored-directory behavior. Do not fabricate application test runs in a repository without executable application logic. Ordinary example-based tests remain useful for regressions but do not replace the owner's property-testing requirement.
+
+## Knowledge and handoff
+
+Update local `context/WORKING_STATE.md` and evidence-backed `context/KNOWLEDGE.md` after meaningful work. Follow `context/MAINTENANCE.md`: retain sources, verification date, scope and review triggers; correct superseded knowledge without erasing decision provenance. Owner rules change only through owner instructions, not through automatic self-editing.
+
+## Data and secrets
+
+Do not commit credentials, `.env` files, Earthdata tokens, personal field-team data or large satellite rasters. `data/`, `outputs/`, `artifacts/` and `.local/` are ignored. Record authorized download locations, metadata, checksums and license terms instead. Redistribute samples only with confirmed rights.

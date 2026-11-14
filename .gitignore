@@ -1,0 +1,45 @@
+# Prompts personales: mantener exclusivamente en local.
+/prompts/
+
+# Credenciales y configuración privada.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+secrets/
+
+# Datos satelitales, cachés y productos generados (publicar solo muestras autorizadas).
+/data/
+/artifacts/
+/outputs/
+/reports/generated/
+*.h5
+*.hdf5
+*.tif
+*.tiff
+*.nc
+
+# Entornos y dependencias.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+
+# Archivos locales y del sistema.
+.local/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini

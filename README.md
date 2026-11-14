@@ -28,6 +28,8 @@ The two requested scenario locators are Río Seco/Carabayllo in northern Lima an
 - [Current solution source and owner overrides](docs/SOURCE_CONTEXT.md).
 - [Scope, data contracts and acceptance gates](docs/SCOPE_AND_VALIDATION.md).
 - [Sources, scientific constraints and decisions](docs/SOURCES_AND_DECISIONS.md).
+- [SAR foundations and Earthdata software evaluation](docs/SAR_FOUNDATIONS.md).
+- [Defined technology stack](docs/TECHNOLOGY_STACK.md) and [ADR 0001](docs/decisions/0001-technology-stack.md).
 
 The latest attachment and corrections supersede the old pilot and optional-AR instructions. Earlier files in `docs/research/` remain dated background; their presence does not select their proposed product directions.
 
@@ -45,7 +47,23 @@ The latest attachment and corrections supersede the old pilot and optional-AR in
 | Interactive AR and AI future scene | Supported-device AR linked to a versioned plan and actual AI integration gate |
 | GIS connector | `loadArcGISGeoJSON(url)` with an English normalized schema and validation |
 
-The source requests a single `index.html` prototype with HTML5, Tailwind CDN, Leaflet, Chart.js and icons. Research must resolve additional AR/AI dependencies, secure contexts and credential protection. No application stack has been installed or selected for production.
+The source's single `index.html` frontend is retained. The implementation stack is now defined below; no application, target environment or deployed production system has been installed/validated.
+
+## Defined implementation stack
+
+| Concern | Selected stack |
+| --- | --- |
+| API and contracts | Python 3.12, FastAPI, Uvicorn, Pydantic |
+| SAR and GIS | asf_search + earthaccess; h5py, NumPy, SciPy, Rasterio, GeoPandas, Shapely, pyproj |
+| Jobs and metadata | RQ + Valkey 8.1.11; SQLAlchemy + SQLite for the single-host pilot |
+| Frontend | Native HTML/JavaScript, Leaflet 1.9.4, Chart.js 4.6.1, Tailwind 4.3.5, Lucide 1.73.0 |
+| Required AR | MindAR 1.2.5 + A-Frame 1.6.0, registered tabletop/image-target mode |
+| AI future scene | Google Gen AI SDK, `gemini-3.8-flash`, schema-constrained output validated server-side before scene assembly |
+| QA | Hypothesis/pytest, fast-check/Playwright; bounded malformed-input fuzzing |
+
+Exact pins, alternatives, runtime boundaries, costs/limitations and verification status are in [TECHNOLOGY_STACK.md](docs/TECHNOLOGY_STACK.md). [Python runtime requirements](requirements.txt), [QA requirements](requirements-dev.txt), [Linux resolver snapshot](requirements-linux-py312.lock) and [frontend version manifest](frontend-dependencies.json) make the decision concrete. The 88-package dry-run resolved declared dependencies; target-runtime imports, native ABI, actual inference and AR camera tests remain pending.
+
+Use already-corrected NISAR GCOV as the initial scientific product family. pyroSAR/SNAP and ISCE are evaluated optional specialist/preprocessing paths, not dependencies added merely because NASA lists them. Do not equate a SAR library with a calibrated buried-moisture or survival model.
 
 ## Three local prompts
 

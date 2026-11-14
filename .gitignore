@@ -31,6 +31,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 node_modules/
+.hypothesis/
+test-results/
+playwright-report/
 dist/
 build/
 .next/

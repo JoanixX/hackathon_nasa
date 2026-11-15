@@ -60,7 +60,9 @@ def scene_job(inputs: dict[str, Any]) -> str:
                 evidence = read_artifact(f"sar_manifests/{inputs['evidence_run_id']}.json")
             except (KeyError, FileNotFoundError, ValueError):
                 evidence = None  # evidence removed: build the scene without the overlay
-        spec = generate_scene(plan, dataset, provider, evidence=evidence)
+        from .terrain import heightmap
+
+        spec = generate_scene(plan, dataset, provider, evidence=evidence, terrain_fn=heightmap)
     except AIError as exc:
         raise JobFailure(exc.code, str(exc)) from exc
     return write_artifact("scenes", spec.scene_version, spec.model_dump(mode="json"))
@@ -141,6 +143,11 @@ def sar_process_job(inputs: dict[str, Any]) -> str:
     from .sar.synthetic import write_synthetic_gcov
 
     scenario = get_scenario(inputs["scenario_id"])
+    if inputs.get("dataset_version"):
+        ds = db.load_dataset(inputs["dataset_version"])
+        if ds is None or ds.get("scenario_id") != inputs["scenario_id"]:
+            raise JobFailure("dataset_not_found", "The zone dataset was not found; confirm the zones again.")
+        scenario = {"summary": {**scenario["summary"], "dataset_version": ds["dataset_version"]}, "sectors": ds["sectors"]}
     s = get_settings()
     if inputs.get("granule_url"):
         path = _download_granule(inputs["granule_url"])

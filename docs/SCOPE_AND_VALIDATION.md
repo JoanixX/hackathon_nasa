@@ -78,3 +78,18 @@ Generate thousands of valid, invalid and boundary cases within explicit budgets,
 ## Timebox and actual team
 
 Plan a 48-hour vertical slice with an environmental engineer validating GIS/ecological assumptions, a systems engineer owning data/contracts/AI and a systems engineer owning map/UI/AR. Roles may be combined according to skills; make integration checkpoints explicit. Freeze evidence/plan/scene contracts early and test the AR hardware and AI path early rather than deferring both mandatory gates to the final hours.
+
+## Revision — November 15, 2026 (ADR 0002)
+
+Additional acceptance criteria for the map-first refactor:
+
+| ID | Criterion | Verification |
+| --- | --- | --- |
+| RZ-15 | Compliant, keyless basemap | No request to `tile.openstreetmap.org`; OpenFreeMap attribution visible; failure state explained |
+| RZ-16 | Legible dated optical context | HLS layer at its native maximum zoom; date chosen among days with pixels; resolution stated |
+| RZ-17 | Real SAR on the map | NISAR GCOV and Sentinel-1 RTC imagery from GIBS with mission, date and "rendered imagery" label |
+| RZ-18 | User zone delimitation | Draw, edit, delete vertices, close, validate (self-intersection, area, bounds), confirm; original and final geometry stored |
+| RZ-19 | Assisted boundary is a proposal | Suggestion shown beside the user polygon with method, sources, IoU and area change; applied only on explicit acceptance |
+| RZ-20 | Charts with real data or explicit unavailability | Rainfall (POWER), acquisition timeline (ASF catalog), DEM slope distribution, plan quantities; no placeholder series |
+| RZ-21 | Coherent 2D/3D/AR terrain | One DEM source for slope, MapLibre terrain and the AR mesh; vertical exaggeration declared |
+| RZ-22 | Guided, map-first UX | Step flow, contextual panel, onboarding, glossary, provenance on every layer; keyboard and 390 px layouts work |

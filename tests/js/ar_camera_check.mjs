@@ -14,16 +14,20 @@ const results = { base: BASE, started_utc: new Date().toISOString(), checks: [] 
 const check = (name, ok, detail) => { results.checks.push({ name, ok, detail }); console.log(ok ? "PASS" : "FAIL", name, detail ?? ""); };
 
 async function preparePlanAndScene(page) {
+  await page.addInitScript(() => { try { localStorage.setItem("raiz-tour", "done"); } catch (_) {} });
   await page.goto(BASE);
-  await page.waitForFunction(() => window.__raiz && window.__raiz.state.dataset, null, { timeout: 30000 });
-  await page.click("#t-plan");
-  await page.click("#btn-plan");
-  await page.waitForFunction(() => window.__raiz.state.planVersion, null, { timeout: 30000 });
-  await page.click("#t-scene");
-  await page.click("#btn-scene");
-  await page.waitForFunction(() => window.__raiz.state.scene, null, { timeout: 120000 });
-  return page.evaluate(() => ({ plan: window.__raiz.state.planVersion, scene: window.__raiz.state.scene.scene_version,
-    mode: window.__raiz.state.scene.inference.mode }));
+  await page.waitForFunction(() => document.querySelector("#panel-body") && document.querySelector("#panel-body").innerText.length > 50, null, { timeout: 60000 });
+  await page.locator("#steps button", { hasText: "Zones" }).click();
+  await page.click("text=Other ways to add zones");
+  await page.click("text=Load demo sectors (synthetic)");
+  await page.locator("#steps button", { hasText: "Plan" }).click();
+  await page.click("text=Compute the plan");
+  await page.waitForFunction(() => /Total S\//.test(document.querySelector("#panel-body").innerText), null, { timeout: 60000 });
+  await page.click("text=Build the future scenario");
+  await page.click("text=Generate the future scenario");
+  await page.waitForFunction(() => !!(window.raiz && window.raiz.state.scene), null, { timeout: 300000, polling: 1000 });
+  return page.evaluate(async () => { const s = (await import("/app/state.js")).state;
+    return { plan: s.plan.plan_version, scene: s.scene.scene_version, mode: s.scene.inference.mode, terrain: s.scene.frame.terrain }; });
 }
 
 await mkdir(".local/qa", { recursive: true });
@@ -40,7 +44,7 @@ await mkdir(".local/qa", { recursive: true });
   const info = await preparePlanAndScene(page);
   results.scene = info;
   const t0 = Date.now();
-  await page.click("#btn-ar");
+  await page.click("text=Start camera AR");
   try {
     await page.waitForFunction(() => document.body.dataset.arState === "active", null, { timeout: 90000 });
     check("target_found_via_camera", true, `${Date.now() - t0} ms after Start camera AR`);
@@ -51,6 +55,7 @@ await mkdir(".local/qa", { recursive: true });
   try {
     await page.waitForFunction(() => document.body.dataset.arState === "tracking_lost", null, { timeout: 30000 });
     const hidden = await page.evaluate(() => !document.querySelector("#raiz-root").object3D.visible);
+    check("scene_terrain_from_dem", /Copernicus DEM/.test(info.terrain), info.terrain);
     check("tracking_lost_hides_overlay", hidden, "empty-table frames");
     await page.waitForFunction(() => document.body.dataset.arState === "active", null, { timeout: 30000 });
     check("target_reacquired", true);
@@ -81,7 +86,7 @@ await mkdir(".local/qa", { recursive: true });
   const page = await context.newPage();
   page.on("dialog", (d) => d.dismiss());
   await preparePlanAndScene(page);
-  await page.click("#btn-ar");
+  await page.click("text=Start camera AR");
   try {
     await page.waitForFunction(() => ["permission_denied", "failed"].includes(document.body.dataset.arState), null, { timeout: 30000 });
     const st = await page.evaluate(() => document.body.dataset.arState);

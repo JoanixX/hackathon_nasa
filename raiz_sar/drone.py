@@ -182,17 +182,24 @@ def plan_deposition(
 
 
 def funded_geometry(geom_m, fraction: float):
-    """Trim a metric polygon from its southern edge to the funded area share (bisection)."""
-    from shapely.geometry import box
+    """Area share funded by the budget, laid out as the zone's core (inward buffer found by bisection).
 
+    The location of the funded part inside a zone is not optimized; the core is a neutral, declared
+    layout so markers and deposition points do not cluster against an arbitrary edge.
+    """
     if fraction >= 1.0:
         return geom_m
+    if fraction <= 0:
+        return geom_m.buffer(-1e9)
+    target = geom_m.area * fraction
     minx, miny, maxx, maxy = geom_m.bounds
-    lo, hi = miny, maxy
+    lo, hi = 0.0, max(maxx - minx, maxy - miny)
+    best = geom_m
     for _ in range(40):
         mid = (lo + hi) / 2
-        if geom_m.intersection(box(minx, miny, maxx, mid)).area < geom_m.area * fraction:
-            lo = mid
-        else:
+        core = geom_m.buffer(-mid)
+        if core.is_empty or core.area < target:
             hi = mid
-    return geom_m.intersection(box(minx, miny, maxx, hi))
+        else:
+            lo, best = mid, core
+    return best if not best.is_empty else geom_m

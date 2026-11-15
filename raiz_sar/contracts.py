@@ -124,6 +124,8 @@ class StudyAreaSummary(StrictModel):
     metric_crs: str
     data_mode: DataMode
     dataset_version: str
+    region_bbox: list[float] | None = None  # [west, south, east, north] where zones may be drawn
+    primary: bool = False
 
 
 # --------------------------------------------------------------------------------------
@@ -365,6 +367,8 @@ class ScenePlacement(StrictModel):
     y: float
     reveal_rank: float  # 0..1 ordering used to reveal placements per stage
     represents_plants: int
+    lon: float | None = None
+    lat: float | None = None
 
 
 class SceneZone(StrictModel):
@@ -400,6 +404,7 @@ class FutureSceneSpecification(StrictModel):
     deposition_points: list[list[float]]
     stages: list[SceneStage]
     evidence_overlay: dict[str, Any] | None = None
+    terrain_grid: dict[str, Any] | None = None  # DEM heights for the AR mesh (row 0 = north)
     root_cutaway: AIRootCutaway
     assumptions: list[str]
     uncertainty_note: str

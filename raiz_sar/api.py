@@ -30,10 +30,14 @@ async def limits_and_headers(request: Request, call_next):
         return JSONResponse({"error": "payload_too_large", "message": "Request body exceeds 6 MB."}, status_code=413)
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "same-origin"
+    # Tile providers (OpenFreeMap, GIBS) may require a Referer; never strip it (ADR 0002).
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), geolocation=(), microphone=()"
-    if request.url.path.startswith("/api/"):
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith(("/api/terrain/", "/api/tiles/")):
         response.headers["Cache-Control"] = "no-store"
+    elif path == "/" or path.startswith("/app/"):
+        response.headers["Cache-Control"] = "no-cache"  # revalidate so clients never run a stale frontend
     return response
 
 
@@ -46,6 +50,25 @@ async def http_error(_request: Request, exc: HTTPException):
     body = exc.detail if isinstance(exc.detail, dict) else {"error": "http_error", "message": str(exc.detail)}
     headers = getattr(exc, "headers", None)
     return JSONResponse(body, status_code=exc.status_code, headers=headers)
+
+
+@app.on_event("startup")
+def prefetch_dem() -> None:
+    """Download the study regions' DEM cells in the background so terrain tiles render from local files."""
+    import os
+    import threading
+
+    if os.environ.get("RAIZ_DEM_PREFETCH", "1") != "1" or get_settings().queue_mode == "inline":
+        return
+    from .terrain import prefetch_region
+
+    def run():
+        for sid in scenario_ids():  # primary area first
+            bbox = get_scenario(sid)["summary"].get("region_bbox")
+            if bbox:
+                prefetch_region(bbox)
+
+    threading.Thread(target=run, name="dem-prefetch", daemon=True).start()
 
 
 @app.get("/", include_in_schema=False)
@@ -159,6 +182,7 @@ class SarProcessBody(BaseModel):
     source: str = Field(default="synthetic", max_length=200)
     acquisition: str = Field(default="baseline", pattern=r"^(baseline|post_rainfall)$")
     granule_url: str | None = Field(default=None, max_length=400)
+    dataset_version: str | None = Field(default=None, max_length=80)
 
 
 class SarDiscoverBody(BaseModel):
@@ -247,7 +271,7 @@ def job_cancel(job_id: str):
 
 
 @app.get("/api/evidence/{scenario_id}")
-def evidence(scenario_id: str):
+def evidence(scenario_id: str, dataset_version: str | None = None):
     if scenario_id not in scenario_ids():
         raise _error(404, "scenario_not_found", "Unknown scenario.")
     base = get_settings().artifact_dir / "sar_manifests"
@@ -258,7 +282,7 @@ def evidence(scenario_id: str):
                 m = json.loads(p.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if m.get("scenario_id") == scenario_id:
+            if m.get("scenario_id") == scenario_id and (dataset_version is None or m.get("dataset_version") == dataset_version):
                 out.append(m)
     out.sort(key=lambda m: m["product"].get("start_time_utc") or "")
     return out
@@ -275,6 +299,138 @@ def evidence_file(run_id: str, name: str):
     if not p.exists():
         raise _error(404, "file_not_found", "File not found.")
     return FileResponse(p, media_type="image/png" if name.endswith(".png") else "image/tiff")
+
+
+app.mount("/app", StaticFiles(directory=REPO_ROOT / "app", check_dir=False), name="app")
+
+
+@app.get("/api/terrain/{z}/{x}/{y}.png")
+def terrain_tile(z: int, x: int, y: int):
+    from fastapi.responses import Response
+
+    from .terrain import TerrainUnavailable, terrain_tile_png
+
+    try:
+        data = terrain_tile_png(z, x, y)
+    except ValueError as exc:
+        raise _error(404, "tile_out_of_range", str(exc))
+    except (TerrainUnavailable, OSError) as exc:
+        raise _error(503, "terrain_unavailable", f"Copernicus DEM unavailable: {type(exc).__name__}")
+    return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+class ZoneIn(BaseModel):
+    name: str = Field(default="", max_length=120)
+    geometry: dict[str, Any]
+    original_geometry: dict[str, Any] | None = None
+    role: str = Field(default="candidate", pattern=r"^(candidate|no_go)$")
+    species_candidate: str | None = Field(default=None, max_length=64)
+    refinement: dict[str, Any] | None = None
+
+
+class ZonesBody(BaseModel):
+    scenario_id: str
+    zones: list[ZoneIn] = Field(max_length=20)
+
+
+@app.post("/api/zones")
+def create_zones(body: ZonesBody):
+    from .zones import ZoneError, build_zone_dataset
+
+    try:
+        out = build_zone_dataset(body.scenario_id, [z.model_dump() for z in body.zones])
+    except ZoneError as exc:
+        raise _error(422, "invalid_zone", str(exc))
+    db.save_dataset(out["dataset_version"], body.scenario_id, out)
+    return out
+
+
+class SuggestBody(BaseModel):
+    geometry: dict[str, Any]
+    optical_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+@app.post("/api/zones/suggest")
+def suggest_zone(body: SuggestBody):
+    from .terrain import TerrainUnavailable
+    from .zones import ZoneError, suggest_boundary
+
+    try:
+        return suggest_boundary(body.geometry, body.optical_date)
+    except ZoneError as exc:
+        raise _error(422, "invalid_zone", str(exc))
+    except (TerrainUnavailable, OSError) as exc:
+        raise _error(503, "terrain_unavailable", f"Suggestion needs the Copernicus DEM: {exc}")
+
+
+@app.get("/api/sources/layers")
+def source_layers():
+    from .sources import LAYERS
+
+    return LAYERS
+
+
+@app.get("/api/sources/dates")
+def source_dates(layer: str, lon: float, lat: float, start: str, end: str):
+    from .sources import SourceUnavailable, available_dates
+
+    try:
+        return available_dates(layer, lon, lat, start, end)
+    except ValueError as exc:
+        raise _error(422, "invalid_request", str(exc))
+    except SourceUnavailable as exc:
+        raise _error(503, "source_unavailable", str(exc))
+
+
+@app.get("/api/sources/coverage")
+def source_coverage(layer: str, lon: float, lat: float, dates: str):
+    from .sources import SourceUnavailable, coverage
+
+    try:
+        return coverage(layer, lon, lat, [d for d in dates.split(",") if d][:60])
+    except ValueError as exc:
+        raise _error(422, "invalid_request", str(exc))
+    except SourceUnavailable as exc:
+        raise _error(503, "source_unavailable", str(exc))
+
+
+@app.get("/api/tiles/{layer}/{date}/{z}/{x}/{y}.png")
+def gibs_tile(layer: str, date: str, z: int, x: int, y: int):
+    from fastapi.responses import Response
+
+    from .sources import SourceUnavailable, gibs_tile_transparent
+
+    try:
+        data = gibs_tile_transparent(layer, date, z, x, y)
+    except ValueError as exc:
+        raise _error(404, "tile_out_of_range", str(exc))
+    except SourceUnavailable as exc:
+        raise _error(502, "source_unavailable", str(exc))
+    return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/sources/rainfall")
+def source_rainfall(lat: float, lon: float, start: str, end: str):
+    from .sources import SourceUnavailable, rainfall
+
+    try:
+        return rainfall(lat, lon, start, end)
+    except ValueError as exc:
+        raise _error(422, "invalid_request", str(exc))
+    except SourceUnavailable as exc:
+        raise _error(503, "source_unavailable", str(exc))
+
+
+@app.get("/api/sources/acquisitions")
+def source_acquisitions(west: float, south: float, east: float, north: float, start: str, end: str):
+    from .sources import SourceUnavailable, acquisitions
+
+    try:
+        return acquisitions((west, south, east, north), start, end)
+    except ValueError as exc:
+        raise _error(422, "invalid_request", str(exc))
+    except SourceUnavailable as exc:
+        raise _error(503, "source_unavailable", str(exc))
 
 
 @app.post("/api/ai/selftest")

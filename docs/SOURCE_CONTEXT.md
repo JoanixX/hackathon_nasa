@@ -144,3 +144,13 @@ Selected baseline: Python 3.12; FastAPI/Uvicorn/Pydantic; RQ with Valkey; SQLAlc
 pyroSAR, PyRAT and ISCE are evaluated tools, not automatic core dependencies. The chosen scientific path consumes already-corrected GCOV; raw focusing/InSAR requires a separate demonstrated need. Camera-free 3D remains a fallback, and heuristic/fixture output does not count as actual AI. A single HTML frontend does not contain backend credentials or do heavy HDF5 processing.
 
 The exact versions and evidence are maintained in the stack specification, dependency manifests and ADR. Selected does not mean installed, runtime-tested or scientifically validated. A changed dependency or model requires a justified ADR amendment rather than silently replacing this baseline.
+
+## 11. Owner decision — Map-first refactor and Piura focus (November 15, 2026)
+
+The owner approved a frontend audit and its recommendations ([ADR 0002](decisions/0002-map-first-frontend-and-real-data.md)). This amends sections 5–7 without removing the four binding corrections:
+
+- **Piura is the primary study area.** Carabayllo remains a secondary selector. Users delimit their own zones on the map (draw, edit, validate, optionally accept an assisted boundary suggestion, confirm); imported GIS zones remain supported. Synthetic sectors survive only as a labeled demo dataset.
+- **Real data first.** Basemap from OpenFreeMap; optical context from HLS on dates with pixels; NISAR GCOV and Sentinel-1 OPERA RTC as GIBS visualizations; Copernicus DEM GLO-30 slope and terrain; NASA POWER daily precipitation (modeled reanalysis). Quantitative backscatter requires an authorized download.
+- **Post-rainfall assessment** uses the actual rainy-season observations that exist: NISAR has no January–April 2026 acquisition over Piura, so the rain event is dated with POWER and compared with Sentinel-1 RTC before/after imagery, clearly labeled C-band; NISAR shows June–October change and later monitoring.
+- **3D twin versus AR.** The twin is the MapLibre DEM terrain view of the same zones and layers; AR is image-tracked tabletop registration with a DEM mesh. Neither is called AR unless the camera registers the target.
+- Every map layer, chart and statement shows its source, date and evidence class; nothing is upsampled or AI-enhanced and presented as finer observation.

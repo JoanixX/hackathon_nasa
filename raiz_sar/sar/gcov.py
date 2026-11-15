@@ -162,11 +162,18 @@ def inspect_gcov(path: str | Path) -> GcovInfo:
     return info
 
 
-def window_indices(coords: np.ndarray, lo: float, hi: float) -> tuple[int, int] | None:
-    """Index range [i0, i1) of coordinate cells (centres) intersecting [lo, hi]; handles descending axes."""
+def window_indices(coords: np.ndarray, lo: float, hi: float, spacing: float | None = None) -> tuple[int, int] | None:
+    """Index range [i0, i1) of coordinate cells (centres) intersecting [lo, hi]; handles descending axes.
+
+    ``spacing`` is the grid cell size; a one-cell axis cannot infer it from its coordinates
+    (minimized counterexample: n=1 treated the cell as zero-width).
+    """
     if len(coords) == 0 or not (math.isfinite(lo) and math.isfinite(hi)) or hi < lo:
         return None
-    half = abs(coords[1] - coords[0]) / 2 if len(coords) > 1 else 0.0
+    if spacing is not None and math.isfinite(spacing):
+        half = abs(spacing) / 2
+    else:
+        half = abs(coords[1] - coords[0]) / 2 if len(coords) > 1 else 0.0
     inside = np.nonzero((coords + half >= lo) & (coords - half <= hi))[0]
     if inside.size == 0:
         return None
@@ -175,8 +182,8 @@ def window_indices(coords: np.ndarray, lo: float, hi: float) -> tuple[int, int] 
 
 def read_window(path: str | Path, grid: FrequencyGrid, term: str, bounds: tuple[float, float, float, float]):
     """Read a linear-power window and its validity mask for (minx, miny, maxx, maxy) in grid CRS."""
-    ix = window_indices(grid.x, bounds[0], bounds[2])
-    iy = window_indices(grid.y, bounds[1], bounds[3])
+    ix = window_indices(grid.x, bounds[0], bounds[2], grid.spacing_x)
+    iy = window_indices(grid.y, bounds[1], bounds[3], grid.spacing_y)
     if ix is None or iy is None:
         return None
     (c0, c1), (r0, r1) = ix, iy

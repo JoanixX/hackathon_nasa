@@ -186,6 +186,30 @@ def test_queue_unavailable_marks_job_failed(monkeypatch):
     assert st_.state == "failed" and st_.error_code == "queue_unavailable"
 
 
+def test_ready_job_with_lost_artifact_is_requeued(manual_queue):
+    """Regression: a ready job whose artifact was deleted used to stay ready with no result forever."""
+    inputs = {"key": "lost", "outcome": "ok"}
+    jid = jobs.submit("scene", inputs, None).job_id
+    jobs.run(jid)
+    st = jobs.get(jid)
+    assert st.state == "ready"
+    (jobs.get_settings().artifact_dir / st.result_ref).unlink()
+    again = jobs.submit("scene", inputs, None)
+    assert again.job_id == jid and again.state == "queued"
+    jobs.run(jid)
+    assert jobs.get(jid).state == "ready" and jobs.artifact_exists(jobs.get(jid).result_ref)
+
+
+def test_ready_job_with_artifact_is_not_rerun(manual_queue):
+    inputs = {"key": "kept", "outcome": "ok"}
+    jid = jobs.submit("scene", inputs, None).job_id
+    jobs.run(jid)
+    CALLS.clear()
+    assert jobs.submit("scene", inputs, None).state == "ready"
+    jobs.run(jid)
+    assert CALLS == []
+
+
 def test_artifact_path_traversal_rejected():
     with pytest.raises(KeyError):
         jobs.read_artifact("../../etc/passwd")

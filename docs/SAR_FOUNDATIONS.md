@@ -44,3 +44,16 @@ The choice is based on the selected product level and team/timebox, not a claim 
 Record dataset/collection ID, granule ID, access URL, terms, acquisition time, band/channel, orbit/geometry, version/maturity, CRS, grid spacing, normalization, valid coverage and known issues. Distinguish catalog discovery, authorized download, inspection and actual processing. Never use a generic mission table as evidence of a suitable local time series.
 
 No local scene was downloaded or processed during this stack-definition task. The concrete software decision is in [the stack specification](TECHNOLOGY_STACK.md) and [ADR 0001](decisions/0001-technology-stack.md).
+
+## Free real-data sources verified on November 15, 2026
+
+| Source | Access | Over lower Piura | Role |
+| --- | --- | --- | --- |
+| NISAR L2 GCOV (ASF) | Earthdata Login for download; catalog open | 21 granules 2026-06-21 → 2026-10-31, 20 `DHDH` | Quantitative backscatter after download |
+| GIBS `NISAR_L2_Geocoded_Polarimetric_Covariance` | Open WMTS, `Level13` | Valid tiles June–October 2026 | False-colour map display |
+| OPERA RTC-S1 (ASF) | Earthdata Login for download | 119 granules January–May 2026 | Rainy-season before/after (C-band) |
+| GIBS `OPERA_L2_Radiometric_Terrain_Corrected_SAR_Sentinel-1` | Open WMTS, `Level12` | Valid tiles 2026-02-10/13/22 | Rainy-season display |
+| Copernicus DEM GLO-30 | Anonymous COG on AWS | Covered (surface model, includes canopy/buildings) | Slope, terrain, AR mesh |
+| NASA POWER daily `PRECTOTCORR` | Open API, no key | Covered (MERRA-2 grid, coarse) | Rain timing, modeled |
+
+GIBS tiles are colour-mapped visualizations, never sampled as backscatter values. See [ADR 0002](decisions/0002-map-first-frontend-and-real-data.md).

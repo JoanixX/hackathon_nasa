@@ -36,7 +36,7 @@ from .contracts import (
     content_hash,
 )
 from .drone import funded_geometry
-from .geo import TabletopFrame, geometry_from_geojson, lonlat_to_metric, to_metric, union_bounds
+from .geo import TabletopFrame, geometry_from_geojson, lonlat_to_metric, metric_to_lonlat, to_metric, union_bounds
 from .safety import text_problems
 from .scenarios import SPECIES_BY_ID, species_for
 
@@ -49,6 +49,7 @@ STAGE_ORDER = ["seed_deposition", "germination", "early_establishment", "establi
 HEIGHT_CAP = {0: 0.0, 3: 0.6, 6: 1.2, 12: 2.5}
 CANOPY_CAP = {0: 0.0, 3: 0.4, 6: 0.8, 12: 1.5}
 MARKER_MAX_AR_UNITS = 0.06  # tallest rendered marker (12-month cap) as a fraction of target width
+TERRAIN_MAX_AR_UNITS = 0.08  # tallest terrain relief as a fraction of target width
 
 SYSTEM_INSTRUCTION = """You construct an interactive future planting SCENARIO for an augmented-reality tabletop view.
 Rules:
@@ -222,7 +223,8 @@ def _evidence_overlay(evidence: dict[str, Any] | None, frame: TabletopFrame, crs
 
 
 def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan, gen: GenerationResult,
-                   p_hash: str, attempts: int, evidence: dict[str, Any] | None = None) -> FutureSceneSpecification:
+                   p_hash: str, attempts: int, evidence: dict[str, Any] | None = None,
+                   terrain_fn=None) -> FutureSceneSpecification:
     crs = dataset["summary"]["metric_crs"]
     feats = dataset["sectors"]["features"]
     by_id = {f["properties"]["sector_id"]: f for f in feats}
@@ -269,10 +271,11 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
             rng = random.Random(f"{plan.plan_version}:{sid}:{i}")
             for (x, y) in _sample(geom, markers, z.pattern, rng):
                 ax, ay = frame.to_ar(x, y)
+                plon, plat = metric_to_lonlat(x, y, crs)
                 placements.append(ScenePlacement(
                     sector_id=sid, species_id=z.species_id, asset_id=SPECIES_BY_ID[z.species_id].asset_id,
                     x=round(ax, 5), y=round(ay, 5), reveal_rank=round(rng.random(), 4),
-                    represents_plants=per_marker,
+                    represents_plants=per_marker, lon=round(plon, 6), lat=round(plat, 6),
                 ))
 
     deposition = []
@@ -284,6 +287,21 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
         deposition.append([round(ax, 5), round(ay, 5)])
 
     stages = [SceneStage(**s.model_dump()) for s in ai.stages]
+    terrain_grid, terrain_note = None, "Flat reference plane: DEM unavailable for this frame."
+    if terrain_fn is not None:
+        x0, y0 = frame.from_ar(-0.5, -frame.aspect / 2)
+        x1, y1 = frame.from_ar(0.5, frame.aspect / 2)
+        try:
+            terrain_grid = terrain_fn((x0, y0, x1, y1), crs)
+            relief = max(1.0, terrain_grid["max_m"] - terrain_grid["min_m"])
+            # Terrain gets its own exaggeration: tallest relief at most 8% of the target width, never below ×1.
+            terrain_ve = round(max(1.0, min(vertical_exaggeration, TERRAIN_MAX_AR_UNITS * frame.meters_per_unit / relief)), 1)
+            terrain_grid["vertical_exaggeration"] = terrain_ve
+            terrain_note = (f"Copernicus DEM GLO-30 surface model, {terrain_grid['nx']}×{terrain_grid['ny']} grid; "
+                            f"elevation {terrain_grid['min_m']:.0f}–{terrain_grid['max_m']:.0f} m, "
+                            f"relief exaggerated ×{terrain_ve:,.1f}.")
+        except Exception as exc:  # network or coverage failure: declared, never invented
+            terrain_note = f"Flat reference plane: DEM unavailable ({type(exc).__name__})."
     trace = InferenceTrace(
         mode=gen.mode, provider=gen.provider, model=gen.model, response_id=gen.response_id, prompt_hash=p_hash,
         latency_ms=gen.latency_ms, usage=gen.usage, attempts=attempts,
@@ -296,11 +314,12 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
             target_id=TARGET_ID, target_aspect=TARGET_ASPECT, metric_crs=crs, origin_x_m=round(frame.origin_x, 3),
             origin_y_m=round(frame.origin_y, 3), meters_per_ar_unit=round(frame.meters_per_unit, 3),
             vertical_exaggeration=vertical_exaggeration,
-            terrain="Flat reference plane: no DEM ingested, relief is not represented.",
+            terrain=terrain_note,
             datum_note=f"Horizontal: WGS 84 projected to {crs}. Vertical: none. Tabletop scale, not survey-grade geolocation.",
         ),
         zones=zones, placements=placements, deposition_points=deposition, stages=stages,
         evidence_overlay=_evidence_overlay(evidence, frame, crs),
+        terrain_grid=terrain_grid,
         root_cutaway=ai.root_cutaway, assumptions=ai.assumptions, uncertainty_note=ai.uncertainty_note,
         inference=trace,
         labels={
@@ -323,7 +342,7 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
 
 
 def generate_scene(plan: PlantingPlan, dataset: dict[str, Any], provider, max_attempts: int = 2,
-                   evidence: dict[str, Any] | None = None) -> FutureSceneSpecification:
+                   evidence: dict[str, Any] | None = None, terrain_fn=None) -> FutureSceneSpecification:
     if not any(a.capsules > 0 for a in plan.budget.allocations):
         raise AIInvalidOutput("The plan has no funded sectors; a future scene needs at least one funded sector.")
     ctx = scene_context(plan, dataset)
@@ -336,7 +355,7 @@ def generate_scene(plan: PlantingPlan, dataset: dict[str, Any], provider, max_at
         ai, errors = validate_ai_plan(gen.text, ctx)
         if ai is not None:
             return assemble_scene(plan, dataset, ai, gen, prompt_hash(SYSTEM_INSTRUCTION, prompt, schema), attempt,
-                                  evidence)
+                                  evidence, terrain_fn)
     raise AIInvalidOutput("Model output rejected after validation: " + "; ".join(errors[:6]))
 
 

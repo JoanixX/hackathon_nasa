@@ -1,13 +1,27 @@
 {
-  "status": "Runtime pins loaded from jsDelivr by index.html and exercised in Chromium on 2026-11-14 (map, charts, icons, A-Frame 1.6.0, MindAR 1.2.5 camera tracking on recorded frames). Physical-device AR and SRI hashes pending; local npm QA install blocked by registry connection resets on this network.",
-  "research_date": "2026-11-14",
+  "status": "ADR 0002 (2026-11-15): MapLibre replaces Leaflet; terra-draw added. Loaded from jsDelivr by index.html and app/ modules. Physical-device AR and SRI hashes pending.",
+  "research_date": "2026-11-15",
   "application_entry_point": "index.html",
+  "application_modules": "app/*.js (native ES modules, no build step)",
   "node_tooling_major": 22,
   "dependencies": {
-    "leaflet": {
-      "version": "1.9.4",
-      "role": "2D evidence map",
-      "evidence": "https://raw.githubusercontent.com/Leaflet/Leaflet/v1.9.4/package.json"
+    "maplibre-gl": {
+      "version": "5.24.1",
+      "role": "Map engine: vector basemap, raster layers, DEM terrain, hillshade, 3D twin",
+      "license": "BSD-3-Clause",
+      "evidence": "https://data.jsdelivr.com/v1/packages/npm/maplibre-gl@5.24.1 (UMD dist/maplibre-gl.js); 6.x ships ESM plus worker only"
+    },
+    "terra-draw": {
+      "version": "1.38.0",
+      "role": "Polygon drawing and vertex editing",
+      "license": "MIT",
+      "evidence": "https://cdn.jsdelivr.net/npm/terra-draw@1.38.0/package.json"
+    },
+    "terra-draw-maplibre-gl-adapter": {
+      "version": "1.4.1",
+      "role": "terra-draw adapter for MapLibre (peer maplibre-gl >=4)",
+      "license": "MIT",
+      "evidence": "https://cdn.jsdelivr.net/npm/terra-draw-maplibre-gl-adapter@1.4.1/package.json"
     },
     "chart.js": {
       "version": "4.6.1",
@@ -16,7 +30,7 @@
     },
     "@tailwindcss/browser": {
       "version": "4.3.5",
-      "role": "Development-only browser CSS compiler",
+      "role": "Not used after ADR 0002 (plain CSS custom properties); kept listed for history",
       "evidence": "https://github.com/tailwindlabs/tailwindcss/releases/tag/v4.3.5"
     },
     "lucide": {
@@ -26,7 +40,7 @@
     },
     "aframe": {
       "version": "1.6.0",
-      "role": "Interactive scene assembly and bundled three.js",
+      "role": "AR scene assembly and bundled three.js (AR only)",
       "evidence": "https://hiukim.github.io/mind-ar-js-doc/quick-start/overview/"
     },
     "mind-ar": {
@@ -34,6 +48,16 @@
       "role": "Image-target camera AR",
       "evidence": "https://hiukim.github.io/mind-ar-js-doc/quick-start/overview/"
     }
+  },
+  "data_services": {
+    "OpenFreeMap": "https://tiles.openfreemap.org/styles/ (no key; attribution required)",
+    "NASA GIBS WMTS": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/ (no key)",
+    "NASA POWER": "https://power.larc.nasa.gov/api/temporal/daily/point (no key; via API proxy)",
+    "Copernicus DEM GLO-30": "https://copernicus-dem-30m.s3.amazonaws.com/ (anonymous; via API terrain endpoint)"
+  },
+  "removed": {
+    "leaflet": "1.9.4 — replaced by MapLibre (ADR 0002)",
+    "tile.openstreetmap.org": "removed: tile usage policy and Referer requirement (ADR 0002)"
   },
   "devDependencies": {
     "@playwright/test": {
@@ -51,7 +75,6 @@
     "Do not use floating latest CDN versions.",
     "Verify package availability and asset hashes before release; no SRI values are invented here.",
     "Use AFRAME.THREE; do not inject a second global three.js.",
-    "Compile Tailwind CSS for production.",
     "Actual camera tracking and real AI inference remain separate acceptance gates."
   ]
 }

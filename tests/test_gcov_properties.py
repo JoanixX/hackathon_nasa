@@ -48,7 +48,7 @@ def test_window_indices_match_brute_force(n, start, step, descending, lo, width)
     if descending:
         coords = coords[::-1]
     hi = lo + width
-    got = window_indices(coords, lo, hi)
+    got = window_indices(coords, lo, hi, step)
     half = step / 2
     inside = [i for i, c in enumerate(coords) if c + half >= lo and c - half <= hi]
     if not inside:

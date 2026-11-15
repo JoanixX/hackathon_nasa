@@ -17,3 +17,5 @@ rasterio==1.5.2
 geopandas==1.2.0
 shapely==2.2.0
 pyproj==3.8.0
+# Segmentation-assisted zone boundary suggestions (SLIC superpixels); ADR 0002.
+scikit-image==0.26.0

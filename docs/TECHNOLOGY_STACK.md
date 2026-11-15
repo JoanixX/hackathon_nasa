@@ -38,7 +38,9 @@ flowchart LR
 | AI service | Google Gen AI SDK **3.3.0**, default model **gemini-3.8-flash** | Actual server-side schema-constrained future-scene/report generation |
 | HTTP client | HTTPX **0.28.1** | Bounded outbound/provider requests and API testing |
 | Frontend | HTML5 and native JavaScript, one `index.html` entry point | No React/Next/Vue migration or production Node server for this prototype |
-| Map | Leaflet **1.9.4** | Two-dimensional evidence, sector selection, plan and overlay display |
+| Map | MapLibre GL JS **5.24.1** (replaced Leaflet 1.9.4 per [ADR 0002](decisions/0002-map-first-frontend-and-real-data.md)) | Vector basemap (OpenFreeMap), GIBS raster layers, DEM terrain/hillshade, 3D twin and zone display |
+| Drawing | terra-draw **1.38.0** + terra-draw-maplibre-gl-adapter **1.4.1** | Zone drawing and vertex editing |
+| Boundary suggestion | scikit-image **0.26.0** | SLIC superpixels on HLS colour and DEM slope (server side) |
 | Charts | Chart.js **4.6.1** | Explicit-unit observation/scenario charts |
 | Styling | Tailwind **4.3.5** browser package for the demo | Source-requested CDN prototype; compile CSS for production |
 | Icons | Lucide **1.73.0** | English-labeled controls with licensed SVG icons |
@@ -96,6 +98,10 @@ Prepare ignored local directories for original data, derived artifacts and logs;
 4. Did not execute Python 3.12 imports, Docker/Valkey/RQ, a local NISAR pipeline, model inference or a camera/AR session. npm metadata requests from the shell timed out; frontend release evidence was verified through official source/release documentation instead. CDN delivery and a full npm/browser lock remain implementation acceptance checks.
 
 The selected stack is concrete. Integration/scientific validity remains to be demonstrated rather than implied by dependency resolution.
+
+## Amendment — November 15, 2026
+
+[ADR 0002](decisions/0002-map-first-frontend-and-real-data.md) replaces Leaflet with MapLibre, removes `tile.openstreetmap.org`, moves frontend code into native ES modules under `app/` loaded by the single `index.html`, adds terra-draw and scikit-image, and adds free real-data sources (OpenFreeMap, GIBS HLS/NISAR/OPERA RTC/IMERG, NASA POWER, Copernicus DEM). The A-Frame camera-free preview is replaced by the MapLibre 3D twin; MindAR/A-Frame remain for AR only.
 
 ## Implementation verification — November 14, 2026
 

@@ -2,6 +2,25 @@
 
 **Date:** November 14, 2026 (America/Lima). **Scope:** first runnable implementation of the selected stack. Everything below distinguishes what was executed from what remains blocked. Software tests are not ecological, geotechnical or user validation.
 
+## Map-first refactor (ADR 0002) — November 15, 2026
+
+[ADR 0002](decisions/0002-map-first-frontend-and-real-data.md) replaced the module-ordered interface with a guided, map-first workflow on real free data. Verified in headless Chromium (`tests/js/ui_flow_check.mjs`, `relief_check.mjs`, `ar_camera_check.mjs`) and the Linux/Python 3.12 test image:
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| RZ-15 Compliant basemap | Met | OpenFreeMap only; no request to `tile.openstreetmap.org`; `Referrer-Policy: strict-origin-when-cross-origin`; Leaflet flag removed with Leaflet |
+| RZ-16 Legible optical context | Met | HLS S30 at its native GIBS level, dates limited to days with pixels; VIIRS only regional |
+| RZ-17 Real SAR on the map | Met | NISAR GCOV (June–October 2026) and Sentinel-1 OPERA RTC (January–May 2026) via GIBS; dates filtered by measured coverage; black no-data made transparent by the API proxy without changing data pixels |
+| RZ-18 Zone delimitation | Met | Drawing by clicks, vertex editing, self-intersection, area, region and overlap checks; original and confirmed geometry stored |
+| RZ-19 Assisted boundary is a proposal | Met | SLIC (scikit-image) on DEM slope and HLS colour; shown beside the zone with IoU, area change and largest shift; applied only on "Use the proposal" |
+| RZ-20 Charts with real data | Met | NASA POWER rainfall with ASF acquisition markers; DEM slope distribution; plan quantities; delay chart only with an entered half-life |
+| RZ-21 Coherent 2D/3D/AR terrain | Met in software | One Copernicus DEM for slope, MapLibre terrain/hillshade (local cell cache, ~1 s per tile) and the AR mesh; declared exaggeration (×1/×3/×6 on the map, capped and declared in AR); OSM buildings extruded at city zoom with tag-based or default heights, declared. Physical-device AR still pending |
+| RZ-22 Guided UX | Met for this increment | Seven-step flow, gated steps that say why, first-run guide, provenance legend, phone layout without overflow; no user study yet |
+
+Run results on November 15, 2026: AI scene by actual inference (`gemini-3.8-flash`) on DEM terrain; camera-pipeline AR 10/10; fast-check 17 properties, about 43,700 cases, all passed. The full-budget Hypothesis campaign was running when this revision was committed; the last reduced-budget run passed after the fixes below.
+
+Defects found and fixed in this phase: panel not refreshed after asynchronous actions; funded share drawn as an arbitrary southern strip (now the zone core, declared); evidence image stretched over the whole AR target; terrain using the vegetation exaggeration; jobs stuck as ready after artifact loss (now re-queued); original geometry not stored when omitted; concurrent requests for one terrain tile sharing a temporary file; slow remote DEM reads (local cell cache); one-cell GCOV axes treated as zero width. Oracle errors found and documented in tests: two star-polygon counterexamples confirmed self-intersecting by Shapely; sub-0.05 ha slivers correctly rejected by the area rule.
+
 ## Evidence classes used in the product
 
 | Class | Meaning in this build | Examples |

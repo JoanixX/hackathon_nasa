@@ -4,7 +4,7 @@
 
 Current solution for the team's **NASA Space Apps Challenge 2026 / Dancing with the SARs** preparation. Repository: `JoanixX/hackathon_nasa` (private). The project has pivoted from the earlier NiñoRadar flood-exposure concept.
 
-**Status: locally runnable prototype.** The API, workers, single-page map, planning modules, GCOV pipeline, AI scene pipeline and camera AR run locally. Sector polygons and SAR layers shown by default are **synthetic fixtures**; actual Gemini inference is **blocked until a server-side key is configured**; physical-device AR is still pending. See [implementation status and acceptance gates](docs/IMPLEMENTATION_STATUS.md).
+**Status: locally runnable, map-first prototype focused on Piura** ([ADR 0002](docs/decisions/0002-map-first-frontend-and-real-data.md)). The map shows real data from free sources: NISAR GCOV and Sentinel-1 OPERA RTC radar and HLS imagery (NASA GIBS), Copernicus DEM terrain, NASA POWER rainfall and the ASF catalog, over an OpenFreeMap basemap. Users draw and confirm their own zones. Gemini generates the future scenario on the server, shown on 3D terrain and in camera AR. Numeric backscatter needs an Earthdata download, and physical-device AR is still pending. See [implementation status and acceptance gates](docs/IMPLEMENTATION_STATUS.md).
 
 ## Run locally
 
@@ -34,7 +34,7 @@ Check actual inference once a key is configured (one tiny structured request, tr
 curl -X POST http://localhost:8765/api/ai/selftest
 ```
 
-Typical flow: choose a scenario → **Process synthetic GCOV fixture** or place a real GCOV `.h5` in `data/` → **Compute versioned plan** → **Generate AI future scene** → **Start camera AR** → **Generate planning draft** → print.
+Workflow (top bar): **Explore** (real NISAR, Sentinel-1, HLS and rain layers by date) → **Zones** (draw, edit, optional boundary proposal, confirm; DEM slope measured) → **Evidence** (slope distribution, radar acquisitions) → **After rain** (2026 rainfall and Sentinel-1 before/after) → **Plan** (species, budget; seeds, germination and establishment kept separate) → **Future** (AI scenario on 3D terrain and in camera AR) → **Report** (printable draft). A first-run guide explains each step; **Guide** reopens it.
 
 ## Tests
 
@@ -64,6 +64,12 @@ docker run --rm -w /app -v "$PWD:/app" raiz-sar-ai:dev python tools/make_fake_ca
 node tests/js/ar_camera_check.mjs http://localhost:8765 .local/qa/fake-camera.y4m
 ```
 
+End-to-end walk through every step in headless Chromium (draws a zone with clicks; uses the live sources and, when configured, Gemini), with screenshots in `.local/qa/ui/`:
+
+```bash
+node tests/js/ui_flow_check.mjs http://localhost:8765
+```
+
 Set `RAIZ_PBT_SCALE` to scale example budgets. Rebuild the AR target with `node tools/build_ar_target.mjs`.
 
 ## Read first
@@ -85,7 +91,9 @@ The two scenario locators are Río Seco/Carabayllo in northern Lima and lower Pi
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` | Single frontend entry point: Leaflet map, modules M1–M8, charts, GIS connector `loadArcGISGeoJSON(url)`, MindAR/A-Frame AR and print view |
+| `index.html` | Single entry point: page shell and the pure core logic (`raiz-core`) shared with the property tests |
+| `app/` | Native ES modules: `main.js` (steps, legend, guide), `panels.js` (one renderer per step), `map.js` (MapLibre, OpenFreeMap, GIBS, DEM terrain), `draw.js` (terra-draw zones), `charts.js`, `ar.js` (MindAR/A-Frame), `styles.css` |
+| `raiz_sar/terrain.py`, `zones.py`, `sources.py` | Copernicus DEM tiles and slope, zone validation and boundary proposals, GIBS date availability, NASA POWER rainfall, ASF acquisition timeline |
 | `raiz_sar/api.py` | FastAPI resources: scenarios, GIS normalization, versioned plans, scene/report/SAR jobs, evidence files |
 | `raiz_sar/contracts.py` | Shared Pydantic contracts and evidence classes |
 | `raiz_sar/planning.py`, `drone.py`, `plans.py` | Eligibility-first allocation, seed/plant quantities, delay sensitivity, seed-deposition plan |
@@ -104,6 +112,7 @@ Stack, pins and decisions: [TECHNOLOGY_STACK.md](docs/TECHNOLOGY_STACK.md), [ADR
 - [Sources, scientific constraints and decisions](docs/SOURCES_AND_DECISIONS.md).
 - [SAR foundations and Earthdata software evaluation](docs/SAR_FOUNDATIONS.md).
 - [Implementation status, evidence and blockers](docs/IMPLEMENTATION_STATUS.md).
+- [ADR 0002: map-first frontend, free real-data sources and Piura focus](docs/decisions/0002-map-first-frontend-and-real-data.md).
 
 Earlier files in `docs/research/` remain dated background and do not select product directions.
 

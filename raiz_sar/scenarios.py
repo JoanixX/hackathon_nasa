@@ -70,6 +70,8 @@ SPECIES_BY_ID = {s.species_id: s for s in SPECIES}
 
 _SCENARIOS: dict[str, dict[str, Any]] = {
     "carabayllo-rio-seco": {
+        "region_bbox": [-77.25, -12.05, -76.75, -11.6],
+        "primary": False,
         "name": "Río Seco ravine / Carabayllo, northern Lima",
         "locator": (-11.83, -77.01),
         "metric_crs": "EPSG:32718",
@@ -90,7 +92,9 @@ _SCENARIOS: dict[str, dict[str, Any]] = {
         ],
     },
     "lower-piura-sechura": {
-        "name": "Lower Piura dry forest / Sechura depression",
+        "region_bbox": [-81.4, -6.4, -79.2, -4.05],
+        "primary": True,
+        "name": "Piura region — lower Piura dry forest and Sechura depression",
         "locator": (-5.52, -80.65),
         "metric_crs": "EPSG:32717",
         "intervention_case": "Dry-forest establishment comparison on low-relief terrain",
@@ -177,12 +181,15 @@ def _build(scenario_id: str) -> dict[str, Any]:
         metric_crs=spec["metric_crs"],
         data_mode=DataMode.synthetic_fixture,
         dataset_version=version,
+        region_bbox=spec["region_bbox"],
+        primary=spec["primary"],
     )
     return {"summary": summary.model_dump(mode="json"), "sectors": fc, "species": species}
 
 
 def scenario_ids() -> list[str]:
-    return list(_SCENARIOS)
+    """Primary study area first (ADR 0002: Piura)."""
+    return sorted(_SCENARIOS, key=lambda k: not _SCENARIOS[k]["primary"])
 
 
 def get_scenario(scenario_id: str) -> dict[str, Any]:

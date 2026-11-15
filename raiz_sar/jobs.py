@@ -29,7 +29,7 @@ LEGAL: dict[str, set[str]] = {
     "failed": {"queued"},
     "cancelled": {"queued"},
     "partial": {"queued"},
-    "ready": set(),
+    "ready": {"queued"},  # only when its artifact is missing (see submit); a ready job is never re-run otherwise
 }
 ACTIVE = {"validating", "queued", "running"}
 QUEUE_FOR = {"scene": "ai", "report": "ai", "sar_process": "sar", "sar_discover": "sar"}
@@ -108,7 +108,9 @@ def submit(kind: str, inputs: dict[str, Any], plan_version: str | None) -> JobSt
     jid = job_id_for(kind, inputs)
     reap_expired()
     existing = get(jid)
-    if existing and existing.state in ACTIVE | {"ready"}:
+    if existing and existing.state == "ready" and existing.result_ref and not artifact_exists(existing.result_ref):
+        pass  # the result was lost (disk cleanup): re-run instead of returning an empty ready job
+    elif existing and existing.state in ACTIVE | {"ready"}:
         return existing  # idempotent: identical request returns the same job
     with engine().connect() as c:
         depth = c.execute(select(func.count()).select_from(jobs).where(
@@ -186,6 +188,12 @@ def write_artifact(kind: str, name: str, body: dict[str, Any]) -> str:
         if os.path.exists(tmp):
             os.unlink(tmp)
     return f"{kind}/{name}.json"
+
+
+def artifact_exists(ref: str) -> bool:
+    base = get_settings().artifact_dir.resolve()
+    path = (base / ref).resolve()
+    return base in path.parents and path.is_file()
 
 
 def read_artifact(ref: str) -> dict[str, Any]:

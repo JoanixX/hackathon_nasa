@@ -1,78 +1,33 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RAÍZ-SAR AI</title>
-<meta name="description" content="Evidence-aware planting planning with SAR evidence, AI-generated future scenarios and tabletop AR.">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.5"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<title>RAÍZ-SAR AI — Piura</title>
+<meta name="description" content="Map-first planning of root-forming vegetation for erosion and huaico-risk reduction in Piura, with NISAR and Sentinel-1 radar, HLS imagery, Copernicus terrain and an AI-assisted future scenario in AR.">
+<meta name="theme-color" content="#1b2226">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="/app/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/terra-draw@1.38.0/dist/terra-draw.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/terra-draw-maplibre-gl-adapter@1.4.1/dist/terra-draw-maplibre-gl-adapter.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lucide@1.73.0/dist/umd/lucide.min.js"></script>
-<style>
-  :root {
-    --bg: #0b1220; --panel: rgba(15, 23, 42, 0.86); --panel-solid: #0f172a; --line: #24324a;
-    --text: #e6edf6; --muted: #9fb0c6; --emerald: #34d399; --cyan: #22d3ee; --amber: #fbbf24;
-    --red: #f87171; --violet: #c4b5fd; --focus: #fde68a;
-  }
-  html, body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 0.75rem; backdrop-filter: blur(6px); }
-  .btn { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--line); border-radius: .5rem; padding: .4rem .7rem; font-size: .85rem; background: #13203a; color: var(--text); cursor: pointer; }
-  .btn:hover { border-color: var(--cyan); }
-  .btn[aria-pressed="true"], .btn.active { background: #0e3a44; border-color: var(--cyan); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn-primary { background: #065f46; border-color: var(--emerald); }
-  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-  .badge { display: inline-flex; align-items: center; gap: .25rem; border-radius: 999px; padding: .05rem .5rem; font-size: .7rem; font-weight: 600; border: 1px solid currentColor; white-space: nowrap; }
-  .ev-observed { color: #93c5fd; } .ev-derived { color: var(--cyan); } .ev-modeled { color: var(--violet); }
-  .ev-ai_generated { color: #f0abfc; } .ev-illustrative { color: var(--amber); } .ev-unknown { color: #94a3b8; border-style: dashed; }
-  .mode-fixture { color: var(--amber); border-style: dashed; } .mode-real { color: var(--emerald); } .mode-blocked { color: var(--red); }
-  label { font-size: .78rem; color: var(--muted); }
-  input, select { background: #0b1527; border: 1px solid var(--line); color: var(--text); border-radius: .4rem; padding: .3rem .45rem; font-size: .85rem; width: 100%; }
-  table { width: 100%; border-collapse: collapse; font-size: .78rem; }
-  th, td { border-bottom: 1px solid var(--line); padding: .3rem .35rem; text-align: left; vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; }
-  .muted { color: var(--muted); }
-  .tab[aria-selected="true"] { border-color: var(--emerald); background: #0b3a2e; }
-  .layout { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(320px, 430px); }
-  #map { min-height: 420px; background: #0a1222; }
-  @media (max-width: 1100px) {
-    .layout { grid-template-columns: minmax(0, 1fr); }
-    .layout > section:nth-child(2) { order: -1; }
-    #map { min-height: 55vh; }
-  }
-  .leaflet-container { font: inherit; }
-  .leaflet-tooltip { background: var(--panel-solid); color: var(--text); border-color: var(--line); }
-  .legend-swatch { display: inline-block; width: .9rem; height: .6rem; border-radius: 2px; margin-right: .3rem; vertical-align: middle; }
-  #ar-overlay { position: fixed; inset: 0; z-index: 3000; background: #000; display: none; }
-  #ar-overlay.open { display: block; }
-  #ar-hud { position: absolute; z-index: 3100; left: 0; right: 0; bottom: 0; padding: .6rem; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; background: linear-gradient(transparent, rgba(2,6,23,.92)); }
-  #ar-top { position: absolute; z-index: 3100; top: 0; left: 0; right: 0; padding: .6rem; display: flex; justify-content: space-between; gap: .5rem; background: linear-gradient(rgba(2,6,23,.92), transparent); }
-  #ar-container { position: absolute; inset: 0; }
-  #ar-container a-scene { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; }
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-  #print-area { display: none; }
-  @media print {
-    body * { visibility: hidden; }
-    #print-area, #print-area * { visibility: visible; }
-    #print-area { display: block; position: absolute; left: 0; top: 0; width: 100%; color: #000; background: #fff; padding: 12mm; font-size: 10.5pt; }
-    #print-area table { font-size: 9pt; } #print-area th, #print-area td { border-bottom: 1px solid #999; color: #000; }
-    #print-area .watermark { border: 2px solid #000; padding: 4px 8px; font-weight: 700; }
-  }
-</style>
 
-<!-- Pure, DOM-free logic shared by the app and the property tests (tests/js extract this block). -->
+<!-- Pure, DOM-free logic shared by the app modules and the property tests (tests/js extract this block). -->
 <script id="raiz-core">
 (function (root) {
   "use strict";
   const HORIZONS = [0, 3, 6, 12];
   const ASSETS = ["shrub_tree_small", "broad_tree", "dry_forest_tree"];
   const STAGES = ["seed_deposition", "germination", "early_establishment", "establishment"];
+  const STEPS = ["explore", "zones", "evidence", "compare", "plan", "future", "report"];
   const JOB_LEGAL = {
     validating: ["queued", "failed"], queued: ["running", "cancelled", "failed"],
     running: ["ready", "partial", "failed", "cancelled", "queued"], failed: ["queued"],
-    cancelled: ["queued"], partial: ["queued"], ready: [],
+    cancelled: ["queued"], partial: ["queued"], ready: ["queued"],
   };
   const JOB_TERMINAL = new Set(["ready", "partial", "failed", "cancelled"]);
 
@@ -94,11 +49,9 @@
     const next = (AR_TRANSITIONS[state] || {})[event];
     return next === undefined ? state : next;
   }
-
   function jobLegal(from, to) { return (JOB_LEGAL[from] || []).includes(to); }
 
-  // Versioned request tracking: a response is accepted only if it answers the latest request
-  // of its kind AND was produced for the plan version currently on screen.
+  // A response is accepted only if it answers the latest request of its kind for the version on screen.
   function createVersionGuard() {
     const latest = {};
     let seq = 0;
@@ -114,7 +67,6 @@
     };
   }
 
-  // Which dependent results must be cleared when an input changes.
   const DEPENDENTS = {
     scenario: ["dataset", "sector", "plan", "scene", "report", "evidence"],
     dataset: ["sector", "plan", "scene", "report"],
@@ -124,23 +76,57 @@
   };
   function dependentsOf(change) { return (DEPENDENTS[change] || []).slice(); }
 
+  // Which workflow steps are open, and why a closed one is closed (the UI shows the reason).
+  function stepAvailability(s) {
+    const hasZones = !!(s && s.dataset && s.dataset.sectors && s.dataset.sectors.features.length);
+    const funded = !!(s && s.plan && s.plan.budget && s.plan.budget.allocations.some((a) => a.capsules > 0));
+    return {
+      explore: { open: true, reason: "" },
+      zones: { open: true, reason: "" },
+      evidence: { open: hasZones, reason: hasZones ? "" : "Confirm at least one zone first." },
+      compare: { open: true, reason: "" },
+      plan: { open: hasZones, reason: hasZones ? "" : "Confirm at least one zone first." },
+      future: { open: funded, reason: funded ? "" : "Compute a plan with at least one funded zone first." },
+      report: { open: !!(s && s.plan), reason: s && s.plan ? "" : "Compute a plan first." },
+    };
+  }
+
   function formatPEN(cents) {
     if (cents === null || cents === undefined || !Number.isFinite(cents)) return "—";
-    const v = cents / 100;
-    return "S/ " + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return "S/ " + (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function formatCount(n) { return Number.isFinite(n) ? Math.round(n).toLocaleString("en-US") : "—"; }
-
   function quantityText(q) {
     if (!q || q.value === null || q.value === undefined) return "Unknown";
     const unit = q.unit === "percent" ? "%" : (q.unit === "dimensionless" ? "" : " " + q.unit);
     return (Math.round(q.value * 100) / 100).toLocaleString("en-US") + unit;
   }
-
   function isFiniteNum(x) { return typeof x === "number" && Number.isFinite(x); }
   function shortText(s, max) { return typeof s === "string" && s.length <= max && !/[<>]/.test(s); }
 
-  // Defensive client-side validation of a scene specification before rendering.
+  // Client-side ring checks (the server validates again with Shapely).
+  function segmentsCross(a, b, c, d) {
+    const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+    const o1 = o(a, b, c), o2 = o(a, b, d), o3 = o(c, d, a), o4 = o(c, d, b);
+    return o1 !== o2 && o3 !== o4 && o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0;
+  }
+  function ringSelfIntersects(ring) {
+    if (!Array.isArray(ring) || ring.length < 4) return false;
+    const n = ring.length - 1; // closed ring: last == first
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        if (Math.abs(i - j) <= 1 || (i === 0 && j === n - 1)) continue; // adjacent edges share a vertex
+        if (segmentsCross(ring[i], ring[i + 1], ring[j], ring[j + 1])) return true;
+      }
+    }
+    return false;
+  }
+  function closeRing(points) {
+    if (!Array.isArray(points) || points.length === 0) return [];
+    const f = points[0], l = points[points.length - 1];
+    return f[0] === l[0] && f[1] === l[1] ? points.slice() : points.concat([f.slice()]);
+  }
+
   function validateScene(spec, expectedPlanVersion) {
     const errors = [];
     if (!spec || typeof spec !== "object") return ["Scene is not an object."];
@@ -164,6 +150,11 @@
     }
     if (!Array.isArray(spec.deposition_points) || spec.deposition_points.length > 5000 ||
         !spec.deposition_points.every((pt) => Array.isArray(pt) && pt.length === 2 && isFiniteNum(pt[0]) && isFiniteNum(pt[1]))) errors.push("Invalid deposition points.");
+    if (spec.terrain_grid !== undefined && spec.terrain_grid !== null) {
+      const g = spec.terrain_grid;
+      if (!g || !Number.isInteger(g.nx) || !Number.isInteger(g.ny) || g.nx < 2 || g.ny < 2 || g.nx * g.ny > 20000 ||
+          !Array.isArray(g.heights_m) || g.heights_m.length !== g.nx * g.ny || !g.heights_m.every(isFiniteNum)) errors.push("Invalid terrain grid.");
+    }
     if (!Array.isArray(spec.stages) || spec.stages.map((s) => s && s.horizon_months).join(",") !== HORIZONS.join(",")) errors.push("Stages must be 0, 3, 6 and 12 months.");
     else {
       let prevH = -1, prevStage = -1;
@@ -180,1168 +171,145 @@
     return errors;
   }
 
-  // Number of placements visible at a stage: reveal_rank strictly below the visible fraction.
   function visiblePlacements(placements, stage) {
     const frac = stage ? stage.visible_fraction_of_expected : 0;
     return placements.filter((p) => p.reveal_rank < frac);
   }
-
   function markerHeight(stage, frame) {
     if (!stage || !frame) return 0;
     return (stage.max_height_m * frame.vertical_exaggeration) / frame.meters_per_ar_unit;
   }
-
+  // Bilinear terrain height (AR units) at tabletop (x, y); grid row 0 is the north edge.
+  function terrainHeightAt(grid, frame, x, y) {
+    if (!grid || !frame) return 0;
+    const u = Math.min(1, Math.max(0, x + 0.5));
+    const v = Math.min(1, Math.max(0, 0.5 - y / frame.target_aspect));
+    const fx = u * (grid.nx - 1), fy = v * (grid.ny - 1);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(grid.nx - 1, x0 + 1), y1 = Math.min(grid.ny - 1, y0 + 1);
+    const h = (r, c) => grid.heights_m[r * grid.nx + c];
+    const tx = fx - x0, ty = fy - y0;
+    const m = (h(y0, x0) * (1 - tx) + h(y0, x1) * tx) * (1 - ty) + (h(y1, x0) * (1 - tx) + h(y1, x1) * tx) * ty;
+    // Terrain carries its own declared exaggeration (smaller than the vegetation markers').
+    const ve = isFiniteNum(grid.vertical_exaggeration) ? grid.vertical_exaggeration : frame.vertical_exaggeration;
+    return (m * ve) / frame.meters_per_ar_unit;
+  }
   function tabletopToMetric(frame, x, y) {
     return [x * frame.meters_per_ar_unit + frame.origin_x_m, y * frame.meters_per_ar_unit + frame.origin_y_m];
   }
   function metricToTabletop(frame, x, y) {
     return [(x - frame.origin_x_m) / frame.meters_per_ar_unit, (y - frame.origin_y_m) / frame.meters_per_ar_unit];
   }
-
   function peruTime(isoUtc) {
     if (!isoUtc) return "Unknown";
     const d = new Date(isoUtc);
     if (Number.isNaN(d.getTime())) return "Unknown";
     return d.toLocaleString("en-GB", { timeZone: "America/Lima", dateStyle: "medium", timeStyle: "short" }) + " (Peru, UTC−5)";
   }
-
-  // Bounded exponential backoff for job polling.
   function backoffDelay(attempt) { return Math.min(4000, Math.round(500 * Math.pow(1.6, Math.max(0, attempt)))); }
 
-  root.RaizCore = { HORIZONS, ASSETS, STAGES, AR_TRANSITIONS, arTransition, jobLegal, JOB_TERMINAL, createVersionGuard,
-    dependentsOf, formatPEN, formatCount, quantityText, validateScene, visiblePlacements, markerHeight,
-    tabletopToMetric, metricToTabletop, peruTime, backoffDelay };
+  // Rain timing: the wettest days, and the nearest observation dates before and after one of them.
+  function rainPeaks(days, n) {
+    return (days || []).filter((d) => isFiniteNum(d.mm)).slice().sort((a, b) => b.mm - a.mm || a.date.localeCompare(b.date)).slice(0, n);
+  }
+  function bracketDates(dates, event) {
+    const sorted = (dates || []).slice().sort();
+    let before = null, after = null;
+    for (const d of sorted) { if (d < event) before = d; else if (d > event && after === null) after = d; }
+    return { before, after };
+  }
+
+  root.RaizCore = { HORIZONS, ASSETS, STAGES, STEPS, AR_TRANSITIONS, arTransition, jobLegal, JOB_TERMINAL, createVersionGuard,
+    dependentsOf, stepAvailability, formatPEN, formatCount, quantityText, validateScene, visiblePlacements, markerHeight,
+    terrainHeightAt, tabletopToMetric, metricToTabletop, peruTime, backoffDelay, ringSelfIntersects, closeRing,
+    rainPeaks, bracketDates };
 })(typeof window !== "undefined" ? window : globalThis);
 </script>
 </head>
-<body class="h-full">
-<a href="#main" class="sr-only focus:not-sr-only">Skip to main content</a>
+<body>
+<a href="#panel" class="skip">Skip to the controls</a>
 <div id="status-live" class="sr-only" aria-live="polite"></div>
 
-<header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b" style="border-color:var(--line)">
-  <div class="flex items-center gap-3">
-    <i data-lucide="sprout" aria-hidden="true" style="color:var(--emerald)"></i>
+<div id="map" role="region" aria-label="Map of the study area. Zones and results are also listed in the side panel."></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v14M16 17c-4 0-7 3-8 7m8-7c4 0 7 3 8 7M16 17v9m-4-3 4 3 4-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M3 29h26" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".5"/></svg>
     <div>
-      <h1 class="text-lg font-bold tracking-wide">RAÍZ-SAR AI</h1>
-      <p class="text-xs muted">Evidence-aware planting planning for erosion and huaico-risk reduction. Independent prototype — not an official NASA, SERFOR or CENEPRED application.</p>
+      <span class="brand-name">RAÍZ-SAR AI</span>
+      <span class="brand-place" id="brand-place">Piura</span>
     </div>
   </div>
-  <div class="flex flex-wrap gap-2 items-center text-xs" id="status-badges">
-    <span class="badge mode-fixture" id="badge-data">Data: loading</span>
-    <span class="badge" id="badge-ai">AI: checking</span>
-    <span class="badge" id="badge-queue">Queue: checking</span>
-  </div>
+  <nav class="steps" aria-label="Workflow">
+    <ol id="steps"></ol>
+  </nav>
+  <div class="status" id="status"></div>
 </header>
 
-<main id="main" class="layout gap-3 p-3">
-  <!-- Left: M1 scenario, M2 evidence, M3 timeline, GIS import -->
-  <section class="flex flex-col gap-3" aria-label="Scenario and evidence controls">
-    <div class="panel p-3">
-      <h2 class="text-sm font-semibold mb-2 flex items-center gap-2"><i data-lucide="map-pin" aria-hidden="true"></i>Scenario</h2>
-      <div class="flex flex-col gap-2" id="scenario-buttons" role="group" aria-label="Scenario selector"></div>
-      <p class="text-xs muted mt-2" id="scenario-note"></p>
-      <p class="text-xs mt-1" id="scenario-mechanism"></p>
-    </div>
-
-    <div class="panel p-3">
-      <h2 class="text-sm font-semibold mb-2 flex items-center gap-2"><i data-lucide="satellite" aria-hidden="true"></i>Evidence layers</h2>
-      <fieldset class="flex flex-col gap-1 text-sm">
-        <legend class="sr-only">Basemap</legend>
-        <label class="flex gap-2 items-center"><input type="radio" name="basemap" value="osm" checked style="width:auto"> Street map (OpenStreetMap)</label>
-        <label class="flex gap-2 items-center"><input type="radio" name="basemap" value="gibs" style="width:auto"> Optical: NASA GIBS VIIRS true color (dated, ~375 m)</label>
-      </fieldset>
-      <label for="optical-date" class="mt-1 block">Optical observation date (UTC)</label>
-      <input id="optical-date" type="date" value="2026-03-17" min="2015-11-24">
-      <label class="flex gap-2 items-center mt-2 text-sm"><input type="checkbox" id="sar-toggle" style="width:auto"> SAR-derived backscatter overlay</label>
-      <label for="sar-term" class="block mt-1">Channel</label>
-      <select id="sar-term"><option value="HVHV">HV (cross-pol) dB</option><option value="HHHH">HH (co-pol) dB</option></select>
-      <div class="flex flex-wrap gap-2 mt-2">
-        <button class="btn" id="btn-sar-synthetic" type="button"><i data-lucide="flask-conical" aria-hidden="true"></i>Process synthetic GCOV fixture</button>
-        <button class="btn" id="btn-sar-discover" type="button"><i data-lucide="search" aria-hidden="true"></i>Search NISAR catalog</button>
-      </div>
-      <div id="evidence-card" class="text-xs mt-2 muted">No SAR product processed for this scenario. Unknown coverage is not low risk.</div>
-      <p class="text-xs mt-2 muted">Backscatter is evidence for specialist review. It is not a measurement of underground moisture depth, survival or root reinforcement.</p>
-    </div>
-
-    <div class="panel p-3">
-      <h2 class="text-sm font-semibold mb-2 flex items-center gap-2"><i data-lucide="calendar-clock" aria-hidden="true"></i>Timeline</h2>
-      <div class="flex flex-wrap gap-2" role="group" aria-label="Timeline phases" id="phase-buttons">
-        <button class="btn" data-phase="baseline" type="button">1 · Pre-rainfall baseline</button>
-        <button class="btn" data-phase="post_rainfall" type="button">2 · Post-rainfall assessment</button>
-        <button class="btn" data-phase="future" type="button">3 · Future scenario</button>
-      </div>
-      <div class="flex flex-wrap gap-2 mt-2" role="group" aria-label="Future horizon" id="horizon-buttons">
-        <button class="btn" data-horizon="0" type="button">Deposition</button>
-        <button class="btn" data-horizon="3" type="button">+3 mo</button>
-        <button class="btn" data-horizon="6" type="button">+6 mo</button>
-        <button class="btn" data-horizon="12" type="button">+12 mo</button>
-        <button class="btn" id="btn-play" type="button" aria-pressed="false"><i data-lucide="play" aria-hidden="true"></i>Step</button>
-      </div>
-      <p class="text-xs mt-2" id="phase-note">Phases 1–2 use actual acquisition dates of processed products. Phase 3 is a generated scenario at relative horizons.</p>
-    </div>
-
-    <div class="panel p-3">
-      <h2 class="text-sm font-semibold mb-2 flex items-center gap-2"><i data-lucide="file-up" aria-hidden="true"></i>GIS import (GeoJSON)</h2>
-      <label for="gis-url">ArcGIS / GeoJSON URL (CORS-enabled)</label>
-      <input id="gis-url" type="url" placeholder="https://…/query?f=geojson">
-      <div class="flex gap-2 mt-2">
-        <button class="btn" id="btn-gis-url" type="button">Load URL</button>
-        <label class="btn" for="gis-file" style="color:var(--text)">Load file</label>
-        <input id="gis-file" type="file" accept=".geojson,.json,application/geo+json,application/json" class="sr-only">
-        <button class="btn" id="btn-gis-reset" type="button" title="Return to the synthetic demonstration sectors">Reset</button>
-      </div>
-      <div id="gis-status" class="text-xs mt-2 muted">Legacy keys (nombre, hectareas, pendiente, sigma_hh, sigma_hv, especie…) are normalized to English fields.</div>
-    </div>
-  </section>
-
-  <!-- Centre: map -->
-  <section class="panel p-1 flex flex-col" aria-label="Map">
-    <div id="map" class="flex-1 rounded-lg" role="application" aria-label="Interactive evidence map. Sectors are also listed in the Sector tab."></div>
-    <div class="flex flex-wrap gap-3 text-xs p-2" id="map-legend" aria-label="Map legend">
-      <span><span class="legend-swatch" style="background:var(--emerald)"></span>Candidate planting sector</span>
-      <span><span class="legend-swatch" style="background:var(--amber)"></span>Field assessment required</span>
-      <span><span class="legend-swatch" style="background:var(--red)"></span>Excluded / no-go</span>
-      <span><span class="legend-swatch" style="background:#fb923c;border-radius:50%"></span>Seed deposition node (proposed)</span>
-      <span><span class="legend-swatch" style="background:#f0abfc"></span>AI-generated future scenario</span>
-    </div>
-  </section>
-
-  <!-- Right: tabs -->
-  <section class="panel p-3 flex flex-col gap-2 min-w-0" aria-label="Analysis">
-    <div role="tablist" class="flex flex-wrap gap-1" aria-label="Analysis tabs" id="tabs">
-      <button class="btn tab" role="tab" aria-selected="true" aria-controls="tab-sector" id="t-sector">Sector</button>
-      <button class="btn tab" role="tab" aria-selected="false" aria-controls="tab-plan" id="t-plan">Plan &amp; budget</button>
-      <button class="btn tab" role="tab" aria-selected="false" aria-controls="tab-establish" id="t-establish">Delay scenarios</button>
-      <button class="btn tab" role="tab" aria-selected="false" aria-controls="tab-drone" id="t-drone">Seed drone</button>
-      <button class="btn tab" role="tab" aria-selected="false" aria-controls="tab-scene" id="t-scene">AI scene &amp; AR</button>
-      <button class="btn tab" role="tab" aria-selected="false" aria-controls="tab-report" id="t-report">Draft report</button>
-    </div>
-
-    <div role="tabpanel" id="tab-sector" aria-labelledby="t-sector" class="flex flex-col gap-2 overflow-auto">
-      <div id="sector-list" class="flex flex-wrap gap-1" role="group" aria-label="Sectors"></div>
-      <div id="sector-card" class="text-sm muted">Select a sector on the map or in the list.</div>
-      <div><canvas id="chart-sar" height="170" aria-label="Backscatter by acquisition chart" role="img"></canvas></div>
-      <p class="text-xs muted" id="chart-sar-note">Backscatter medians per acquisition in dB. No moisture series is shown: soil moisture is not estimated.</p>
-    </div>
-
-    <div role="tabpanel" id="tab-plan" aria-labelledby="t-plan" class="flex flex-col gap-2 overflow-auto" hidden>
-      <div class="flex gap-2" role="group" aria-label="Planning mode">
-        <button class="btn" id="mode-budget" aria-pressed="true" type="button">Budget (S/)</button>
-        <button class="btn" id="mode-target" aria-pressed="false" type="button">Established-plant target</button>
-      </div>
-      <div class="grid grid-cols-2 gap-2">
-        <div id="wrap-budget"><label for="in-budget">Municipal budget (PEN)</label><input id="in-budget" type="number" min="0" step="100" value="25000"></div>
-        <div id="wrap-target" class="hidden"><label for="in-target">Target established plants</label><input id="in-target" type="number" min="0" step="100" value="5000"></div>
-        <div><label for="in-maxslope">Planning slope limit (%)</label><input id="in-maxslope" type="number" min="1" max="1000" value="100"></div>
-      </div>
-      <details class="text-sm"><summary class="cursor-pointer">Assumptions <span class="badge ev-illustrative">Illustrative — replace with specialist values</span></summary>
-        <div class="grid grid-cols-2 gap-2 mt-2" id="assumption-inputs">
-          <div><label for="a-density">Target density (plants/ha)</label><input id="a-density" type="number" min="0" value="400"></div>
-          <div><label for="a-spc">Seeds per capsule</label><input id="a-spc" type="number" min="1" value="3"></div>
-          <div><label for="a-germ">Germination fraction (0–1)</label><input id="a-germ" type="number" min="0.01" max="1" step="0.01" value="0.3"></div>
-          <div><label for="a-est">Establishment fraction of germinated (0–1)</label><input id="a-est" type="number" min="0.01" max="1" step="0.01" value="0.4"></div>
-          <div><label for="a-capcost">Capsule cost (PEN)</label><input id="a-capcost" type="number" min="0" step="0.05" value="0.6"></div>
-          <div><label for="a-deliv">Delivery cost per ha (PEN)</label><input id="a-deliv" type="number" min="0" value="180"></div>
-          <div><label for="a-maint">Maintenance cost per ha (PEN)</label><input id="a-maint" type="number" min="0" value="120"></div>
-          <div><label for="a-monit">Fixed monitoring cost (PEN)</label><input id="a-monit" type="number" min="0" value="1500"></div>
-        </div>
-      </details>
-      <div id="species-assign" class="text-sm"></div>
-      <button class="btn btn-primary" id="btn-plan" type="button"><i data-lucide="calculator" aria-hidden="true"></i>Compute versioned plan</button>
-      <div id="plan-status" class="text-xs muted">No plan computed. Map, charts, AR scene and report all use one plan version.</div>
-      <div id="plan-results" class="text-sm"></div>
-      <div><canvas id="chart-plan" height="190" role="img" aria-label="Seeds, germination and establishment chart"></canvas></div>
-    </div>
-
-    <div role="tabpanel" id="tab-establish" aria-labelledby="t-establish" class="flex flex-col gap-2 overflow-auto" hidden>
-      <div class="grid grid-cols-2 gap-2">
-        <div><label for="in-refdate">Post-rainfall reference date</label><input id="in-refdate" type="date" value="2026-03-15"></div>
-        <div><label for="in-halflife">Establishment half-life (days, assumption)</label><input id="in-halflife" type="number" min="1" placeholder="Not estimated"></div>
-      </div>
-      <p class="text-xs muted">Delays compared: now, +15, +30, +45 and +60 days. Leave the half-life empty to keep the scenario “Not estimated”. Recompute the plan to apply.</p>
-      <div id="establish-results" class="text-sm"></div>
-      <div><canvas id="chart-establish" height="190" role="img" aria-label="Establishment sensitivity by planting delay"></canvas></div>
-    </div>
-
-    <div role="tabpanel" id="tab-drone" aria-labelledby="t-drone" class="flex flex-col gap-2 overflow-auto" hidden>
-      <p class="text-xs">The drone extension <strong>deposits seeds or seed capsules</strong>. This view produces a candidate deposition plan for review. No flight command, upload or planting is executed.</p>
-      <div class="grid grid-cols-2 gap-2">
-        <div><label for="d-payload">Payload (capsules per sortie)</label><input id="d-payload" type="number" min="1" value="400"></div>
-        <div><label for="d-route">Route limit per sortie incl. reserve (m)</label><input id="d-route" type="number" min="100" value="3000"></div>
-        <div><label for="d-spacing">Node spacing (m)</label><input id="d-spacing" type="number" min="2" value="25"></div>
-        <div><label for="d-buffer">No-go buffer (m)</label><input id="d-buffer" type="number" min="0" value="10"></div>
-      </div>
-      <label class="flex gap-2 items-center text-sm"><input type="checkbox" id="drone-toggle" checked style="width:auto"> Show deposition nodes and candidate routes on the map</label>
-      <div id="drone-results" class="text-sm muted">Compute a plan to see the deposition plan.</div>
-    </div>
-
-    <div role="tabpanel" id="tab-scene" aria-labelledby="t-scene" class="flex flex-col gap-2 overflow-auto" hidden>
-      <p class="text-xs">Pipeline: versioned plan → constrained AI request on the server → structured scene specification → validation → deterministic assembly → AR on the printed target.</p>
-      <div class="flex flex-wrap gap-2">
-        <button class="btn btn-primary" id="btn-scene" type="button" disabled><i data-lucide="sparkles" aria-hidden="true"></i>Generate AI future scene</button>
-        <button class="btn" id="btn-scene-cancel" type="button" disabled>Cancel</button>
-      </div>
-      <div id="scene-status" class="text-xs muted">Prerequisite: compute a plan with at least one funded sector.</div>
-      <div id="scene-summary" class="text-sm"></div>
-      <div class="flex flex-wrap gap-2">
-        <button class="btn" id="btn-ar" type="button" disabled><i data-lucide="scan-line" aria-hidden="true"></i>Start camera AR</button>
-        <button class="btn" id="btn-preview" type="button" disabled><i data-lucide="box" aria-hidden="true"></i>3D preview (not AR)</button>
-        <a class="btn" href="/assets/ar/target.png" target="_blank" rel="noopener"><i data-lucide="printer" aria-hidden="true"></i>Open printable AR target</a>
-      </div>
-      <p class="text-xs muted" id="ar-gate-note">AR uses image-target tabletop registration (MindAR 1.2.5 + A-Frame 1.6.0). Camera access requires HTTPS or localhost and starts only after you press “Start camera AR”.</p>
-    </div>
-
-    <div role="tabpanel" id="tab-report" aria-labelledby="t-report" class="flex flex-col gap-2 overflow-auto" hidden>
-      <div class="flex flex-wrap gap-2">
-        <button class="btn btn-primary" id="btn-report" type="button" disabled><i data-lucide="file-text" aria-hidden="true"></i>Generate planning draft</button>
-        <button class="btn" id="btn-print" type="button" disabled><i data-lucide="printer" aria-hidden="true"></i>Print / save as PDF</button>
-      </div>
-      <div id="report-status" class="text-xs muted">Prerequisite: compute a plan. Including a ready AI scene is optional.</div>
-      <div id="report-view" class="text-sm"></div>
-    </div>
-  </section>
-</main>
-
-<!-- AR overlay (camera AR or labeled 3D preview) -->
-<div id="ar-overlay" role="dialog" aria-modal="true" aria-labelledby="ar-title">
-  <div id="ar-container"></div>
-  <div id="ar-top">
-    <div>
-      <h2 id="ar-title" class="text-sm font-bold">AR future scenario</h2>
-      <p class="text-xs" id="ar-state" aria-live="polite">Idle</p>
-      <p class="text-xs" id="ar-labels"></p>
-    </div>
-    <button class="btn" id="btn-ar-exit" type="button"><i data-lucide="x" aria-hidden="true"></i>Exit</button>
+<aside class="panel" id="panel" aria-labelledby="panel-title">
+  <div class="panel-head">
+    <h1 id="panel-title">Explore</h1>
+    <button class="icon-btn" id="panel-toggle" type="button" aria-expanded="true" aria-controls="panel-body" title="Collapse the panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
   </div>
-  <div id="ar-hud">
-    <div role="group" aria-label="AR time horizon" class="flex gap-1" id="ar-horizons">
-      <button class="btn" data-ar-h="0" type="button">Deposition</button>
-      <button class="btn" data-ar-h="1" type="button">+3 mo</button>
-      <button class="btn" data-ar-h="2" type="button">+6 mo</button>
-      <button class="btn" data-ar-h="3" type="button">+12 mo</button>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
+
+<section class="legend" id="legend" aria-label="Map legend and data provenance"></section>
+
+<div class="map-tools" role="group" aria-label="Map view">
+  <button class="tool" id="btn-3d" type="button" aria-pressed="false" title="Tilt the map over the Copernicus DEM terrain (3D twin)">3D terrain</button>
+  <div class="seg tool-seg" id="relief" role="group" aria-label="Vertical exaggeration of the relief" hidden>
+    <button type="button" data-ex="1" aria-pressed="true" title="True relief">×1</button>
+    <button type="button" data-ex="3" aria-pressed="false" title="Relief exaggerated three times">×3</button>
+    <button type="button" data-ex="6" aria-pressed="false" title="Relief exaggerated six times">×6</button>
+  </div>
+  <button class="tool" id="btn-ar-quick" type="button" title="Camera AR of the future scenario on the printed target">AR</button>
+  <button class="tool" id="btn-help" type="button" title="Show the guided tour again">Guide</button>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<!-- Guided tour -->
+<div class="tour" id="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" hidden>
+  <div class="tour-card">
+    <p class="tour-count" id="tour-count"></p>
+    <h2 id="tour-title"></h2>
+    <p id="tour-text"></p>
+    <div class="row">
+      <button class="btn" id="tour-skip" type="button">Skip the guide</button>
+      <button class="btn primary" id="tour-next" type="button">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- AR (camera) overlay -->
+<div id="ar-overlay" role="dialog" aria-modal="true" aria-labelledby="ar-title" hidden>
+  <div id="ar-container"></div>
+  <div class="ar-top">
+    <div>
+      <h2 id="ar-title">AR future scenario</h2>
+      <p id="ar-state" aria-live="polite">Idle</p>
+      <p id="ar-labels"></p>
+    </div>
+    <button class="btn" id="btn-ar-exit" type="button">Exit AR</button>
+  </div>
+  <div class="ar-hud">
+    <div class="seg" role="group" aria-label="Time horizon" id="ar-horizons">
+      <button type="button" data-ar-h="0">Seeds</button>
+      <button type="button" data-ar-h="1">3 months</button>
+      <button type="button" data-ar-h="2">6 months</button>
+      <button type="button" data-ar-h="3">12 months</button>
     </div>
     <button class="btn" id="btn-ar-roots" type="button" aria-pressed="false">Illustrative roots</button>
-    <button class="btn" id="btn-ar-evidence" type="button" aria-pressed="true">Present evidence layer</button>
-    <p class="text-xs flex-1 min-w-[200px]" id="ar-caption"></p>
-    <p class="text-xs w-full" id="ar-zone-info" aria-live="polite">Tap a sector outline to inspect it.</p>
+    <button class="btn" id="btn-ar-evidence" type="button" aria-pressed="true">Evidence layer</button>
+    <p id="ar-caption"></p>
+    <p id="ar-zone-info" aria-live="polite">Tap a zone outline to inspect it.</p>
   </div>
 </div>
 
 <div id="print-area" aria-hidden="true"></div>
 
-<script>
-(function () {
-  "use strict";
-  const C = window.RaizCore;
-  const $ = (id) => document.getElementById(id);
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const guard = C.createVersionGuard();
-  const state = {
-    scenarios: [], scenarioId: null, dataset: null, species: [], imported: null, selectedSector: null,
-    plan: null, planVersion: null, sceneJob: null, scene: null, reportJob: null, report: null, evidence: [],
-    phase: "baseline", horizonIndex: 3, mode: "budget", health: null, ar: "idle",
-  };
-  const charts = {};
-
-  // ---------------------------------------------------------------- helpers
-  function announce(msg) { $("status-live").textContent = msg; }
-  function el(tag, attrs, ...children) {
-    const e = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (k === "class") e.className = v; else if (k === "text") e.textContent = v;
-      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
-    }
-    for (const c of children) if (c !== null && c !== undefined) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
-    return e;
-  }
-  function badge(cls, text) { return el("span", { class: "badge ev-" + cls, title: "Evidence class: " + cls }, text || cls.replace("_", " ")); }
-  async function api(path, opts) {
-    const res = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts || {}));
-    let body = null;
-    try { body = await res.json(); } catch (_) { body = null; }
-    if (!res.ok) {
-      const err = new Error((body && body.message) || ("Request failed (" + res.status + ")"));
-      err.status = res.status; err.body = body; err.retryAfter = res.headers.get("Retry-After");
-      throw err;
-    }
-    return body;
-  }
-  function icons() { if (window.lucide) window.lucide.createIcons(); }
-
-  // ---------------------------------------------------------------- map
-  const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([-11.83, -77.01], 14);
-  const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
-  function gibsLayer(date) {
-    return L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" + date +
-      "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg", { maxNativeZoom: 9, maxZoom: 19,
-      attribution: "Optical: NASA GIBS / VIIRS SNPP Corrected Reflectance, " + date + " (UTC). Coarse ~375 m; not Sentinel-2." });
-  }
-  let gibs = null;
-  const layers = { sectors: L.layerGroup().addTo(map), sar: L.layerGroup().addTo(map), drone: L.layerGroup().addTo(map), future: L.layerGroup().addTo(map) };
-
-  function setBasemap() {
-    const v = document.querySelector('input[name="basemap"]:checked').value;
-    if (gibs) { map.removeLayer(gibs); gibs = null; }
-    if (v === "gibs") { gibs = gibsLayer($("optical-date").value || "2026-03-17").addTo(map); gibs.bringToBack(); map.removeLayer(osm); }
-    else if (!map.hasLayer(osm)) osm.addTo(map).bringToBack();
-  }
-  document.querySelectorAll('input[name="basemap"]').forEach((r) => r.addEventListener("change", setBasemap));
-  $("optical-date").addEventListener("change", setBasemap);
-
-  function eligibilityOf(sid) {
-    if (!state.plan) return null;
-    return state.plan.eligibility.find((e) => e.sector_id === sid) || null;
-  }
-  function sectorStyle(feature) {
-    const p = feature.properties;
-    const e = eligibilityOf(p.sector_id);
-    const status = e ? e.status : (p.exclusion_reason ? "excluded" : "pending");
-    const color = status === "eligible" ? "#34d399" : status === "excluded" ? "#f87171" : status === "pending" ? "#22d3ee" : "#fbbf24";
-    return { color, weight: p.sector_id === state.selectedSector ? 4 : 2, dashArray: status === "eligible" ? null : "6 4",
-      fillOpacity: status === "excluded" ? 0.08 : 0.18, fillColor: color };
-  }
-  function drawSectors(fit) {
-    layers.sectors.clearLayers();
-    if (!state.dataset) return;
-    const gj = L.geoJSON(state.dataset.sectors, {
-      style: sectorStyle,
-      onEachFeature: (f, layer) => {
-        const p = f.properties;
-        layer.bindTooltip(p.sector_name + " (" + p.sector_id + ")" + (p.data_mode === "synthetic_fixture" ? " — synthetic polygon" : ""));
-        layer.on("click", () => selectSector(p.sector_id));
-      },
-    }).addTo(layers.sectors);
-    if (fit) {
-      const b = gj.getBounds();
-      if (reduceMotion) map.fitBounds(b, { padding: [20, 20] }); else map.flyToBounds(b, { padding: [20, 20], duration: 0.8 });
-    }
-  }
-
-  // ---------------------------------------------------------------- scenarios (M1)
-  async function loadScenarios() {
-    state.scenarios = await api("/api/scenarios");
-    const wrap = $("scenario-buttons");
-    wrap.replaceChildren();
-    for (const s of state.scenarios) {
-      wrap.append(el("button", { class: "btn", type: "button", "data-scenario": s.scenario_id, "aria-pressed": "false",
-        onclick: () => selectScenario(s.scenario_id) }, s.name));
-    }
-    await selectScenario(state.scenarios[0].scenario_id);
-  }
-
-  function resetDependents(change) {
-    for (const d of C.dependentsOf(change)) {
-      if (d === "plan") { state.plan = null; state.planVersion = null; guard.invalidate("plan"); }
-      if (d === "scene") { state.scene = null; state.sceneJob = null; guard.invalidate("scene"); }
-      if (d === "report") { state.report = null; state.reportJob = null; guard.invalidate("report"); }
-      if (d === "evidence") state.evidence = [];
-      if (d === "sector") state.selectedSector = null;
-    }
-    if (state.ar !== "idle" && state.ar !== "ended") arEvent("stale_plan");
-    renderPlan(); renderScene(); renderReport(); renderFuture();
-  }
-
-  async function selectScenario(id) {
-    resetDependents("scenario");
-    state.scenarioId = id; state.imported = null;
-    document.querySelectorAll("[data-scenario]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.scenario === id)));
-    const tok = guard.issue("scenario", null);
-    const data = await api("/api/scenarios/" + encodeURIComponent(id));
-    if (!guard.accept(tok, null)) return; // a newer scenario selection superseded this one
-    state.dataset = data; state.species = data.species;
-    $("scenario-note").textContent = data.summary.locator_note + " Locator " + data.summary.locator_lat + ", " + data.summary.locator_lon + ".";
-    $("scenario-mechanism").textContent = data.summary.intervention_case + ". " + data.summary.hazard_mechanism_note;
-    updateDataBadge();
-    drawSectors(true); renderSectorList(); renderSpeciesAssign();
-    await loadEvidence();
-    announce("Scenario " + data.summary.name + " loaded.");
-  }
-
-  function updateDataBadge() {
-    const b = $("badge-data");
-    const synthetic = state.dataset && state.dataset.summary.data_mode !== "real";
-    b.className = "badge " + (synthetic ? "mode-fixture" : "mode-real");
-    b.textContent = synthetic ? "Sectors: synthetic fixture" : "Sectors: imported data";
-  }
-
-  // ---------------------------------------------------------------- evidence (M2/M3)
-  async function loadEvidence() {
-    const sid = state.scenarioId;
-    const ev = await api("/api/evidence/" + encodeURIComponent(sid));
-    if (sid !== state.scenarioId) return;
-    const dsv = state.dataset.summary.dataset_version;
-    state.evidence = ev.filter((m) => m.dataset_version === dsv);
-    renderEvidence(); renderSar(); renderSectorCard(); renderSarChart();
-  }
-  function evidenceForPhase() {
-    if (!state.evidence.length) return null;
-    const sorted = state.evidence.slice().sort((a, b) => (a.product.start_time_utc || "").localeCompare(b.product.start_time_utc || ""));
-    if (state.phase === "baseline") return sorted[0];
-    return sorted[sorted.length - 1];
-  }
-  function renderEvidence() {
-    const card = $("evidence-card");
-    const m = evidenceForPhase();
-    if (!m) { card.textContent = "No SAR product processed for this scenario. Unknown coverage is not low risk."; return; }
-    const p = m.product;
-    card.replaceChildren(
-      el("div", { class: "flex flex-wrap gap-1 mb-1" },
-        el("span", { class: "badge " + (m.data_mode === "real" ? "mode-real" : "mode-fixture") }, m.data_mode === "real" ? "Real product" : "SYNTHETIC FIXTURE — not real data"),
-        badge("derived", "derived")),
-      el("div", {}, "Granule: " + (p.granule_id || "Unknown")),
-      el("div", {}, "Acquired: " + (p.start_time_utc || "Unknown") + " UTC · " + C.peruTime(p.start_time_utc)),
-      el("div", {}, "Band/frequency: " + m.band + " " + m.frequency + " · channels: " + Object.keys(m.layers).join(", ")),
-      el("div", {}, "Normalization: " + p.backscatter_normalization + " (" + p.normalization_source + ")"),
-      el("div", {}, "Grid spacing: " + m.grid_spacing_m.join(" × ") + " m (not effective resolution) · S-band in product: " + (m.s_band_available ? "yes" : "no")),
-      el("div", {}, "RVI: " + m.rvi_status),
-      el("div", {}, state.evidence.length + " processed acquisition(s) for this dataset version."));
-  }
-  function renderSar() {
-    layers.sar.clearLayers();
-    if (!$("sar-toggle").checked || state.phase === "future") return;
-    const m = evidenceForPhase();
-    if (!m) return;
-    const term = m.layers[$("sar-term").value] ? $("sar-term").value : Object.keys(m.layers)[0];
-    const layer = m.layers[term];
-    L.imageOverlay("/api/evidence-files/" + m.run_id + "/" + layer.preview_png, layer.preview_bounds_latlon,
-      { opacity: 0.75, alt: term + " backscatter dB overlay", attribution: (m.data_mode === "real" ? "NISAR GCOV (derived)" : "SYNTHETIC FIXTURE backscatter") }).addTo(layers.sar);
-  }
-  $("sar-toggle").addEventListener("change", renderSar);
-  $("sar-term").addEventListener("change", renderSar);
-
-  async function runJob(kind, path, body, statusEl, onDone, tokenKind, timeoutMs) {
-    const limitMs = timeoutMs || 240000;
-    // Scene/report results are bound to the plan on screen; SAR jobs are not plan-dependent.
-    const planBound = kind === "scene" || kind === "report";
-    const tok = guard.issue(tokenKind || kind, state.planVersion);
-    const current = () => (planBound ? state.planVersion : tok.planVersion);
-    let st;
-    try { st = await api(path, { method: "POST", body: JSON.stringify(body) }); }
-    catch (e) {
-      statusEl.textContent = (e.status === 429 ? "Queue is full; retry in " + (e.retryAfter || "a few") + " s. " : "") + e.message;
-      return null;
-    }
-    let attempt = 0;
-    const started = Date.now();
-    while (!C.JOB_TERMINAL.has(st.state) && Date.now() - started < limitMs) {
-      statusEl.textContent = "Job " + st.job_id + ": " + st.state + "…";
-      await new Promise((r) => setTimeout(r, C.backoffDelay(attempt++)));
-      if (!guard.accept(tok, current())) return null;
-      try { st = await api("/api/jobs/" + encodeURIComponent(st.job_id)); } catch (e) { statusEl.textContent = "Status unavailable: " + e.message; }
-    }
-    if (!guard.accept(tok, current(), st.plan_version === null ? undefined : st.plan_version)) {
-      statusEl.textContent = "Discarded a stale result from a previous plan version.";
-      return null;
-    }
-    if (!C.JOB_TERMINAL.has(st.state)) { statusEl.textContent = "Still " + st.state + " after " + Math.round(limitMs / 60000) + " minutes; check again later."; return st; }
-    statusEl.textContent = "Job " + st.job_id + ": " + st.state + (st.error_code ? " (" + st.error_code + ": " + (st.error_message || "") + ")" : "");
-    onDone(st);
-    return st;
-  }
-
-  $("btn-sar-synthetic").addEventListener("click", async () => {
-    const card = $("evidence-card");
-    for (const acquisition of ["baseline", "post_rainfall"]) {
-      await runJob("sar", "/api/sar/process", { scenario_id: state.scenarioId, source: "synthetic", acquisition }, card, () => {}, "sar-" + acquisition);
-    }
-    await loadEvidence();
-    $("sar-toggle").checked = true; renderSar();
-    announce("Synthetic GCOV fixtures processed and labeled.");
-  });
-  $("btn-sar-discover").addEventListener("click", async () => {
-    const card = $("evidence-card");
-    await runJob("sar_discover", "/api/sar/discover", { scenario_id: state.scenarioId }, card, (st) => {
-      const r = st.result;
-      if (!r) return;
-      const list = el("ul", { class: "mt-1" });
-      const dl = el("div", { class: "mt-1", "aria-live": "polite" });
-      for (const it of r.results.slice(0, 8)) {
-        const btn = el("button", { class: "btn", type: "button", title: "Download this granule with the server's Earthdata login and derive the AOI layers" }, "Download & process");
-        btn.addEventListener("click", async () => {
-          btn.disabled = true;
-          dl.textContent = "Downloading " + (it.h5_bytes ? (it.h5_bytes / 1e9).toFixed(2) + " GB" : "granule") + " on the server… this can take several minutes.";
-          await runJob("sar", "/api/sar/process", { scenario_id: state.scenarioId, granule_url: it.url }, dl, () => {}, "sar-real", 7200000);
-          btn.disabled = false;
-          await loadEvidence();
-          $("sar-toggle").checked = true; setPhase("post_rainfall");
-        });
-        list.append(el("li", { class: "mb-1" }, (it.start_time_utc || "?") + " · mode " + (it.polarization_mode_from_name || "unknown") +
-          (it.polarization_mode_from_name && it.polarization_mode_from_name.startsWith("S") ? " (single-pol: no HV)" : "") +
-          (it.h5_bytes ? " · " + (it.h5_bytes / 1e9).toFixed(2) + " GB " : " "), btn));
-      }
-      card.replaceChildren(el("div", {}, "Catalog discovery: " + r.count + " NISAR GCOV granule(s) intersect the AOI (" + r.query.start + " to " + r.query.end + "). Nothing is downloaded until you choose one."), list, dl,
-        el("div", { class: "muted" }, (state.health && state.health.earthdata_configured) ? "Earthdata login is configured on the server." : "Earthdata login is NOT configured: set EARTHDATA_USERNAME and EARTHDATA_PASSWORD in .env and restart."));
-    }, "discover");
-  });
-
-  // ---------------------------------------------------------------- timeline
-  function setPhase(phase) {
-    state.phase = phase;
-    document.querySelectorAll("[data-phase]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.phase === phase)));
-    const m = evidenceForPhase();
-    const note = $("phase-note");
-    if (phase === "future") note.textContent = state.scene ? "Generated scenario at +" + C.HORIZONS[state.horizonIndex] + " months relative to deposition — not an observation." : "No future scenario generated yet.";
-    else note.textContent = m ? (phase === "baseline" ? "Baseline" : "Post-rainfall") + " evidence acquired " + (m.product.start_time_utc || "Unknown") + " UTC (" + (m.data_mode === "real" ? "real" : "synthetic fixture") + ")." : "No processed acquisition for this phase.";
-    renderEvidence(); renderSar(); renderFuture();
-  }
-  document.querySelectorAll("[data-phase]").forEach((b) => b.addEventListener("click", () => setPhase(b.dataset.phase)));
-  document.querySelectorAll("[data-horizon]").forEach((b) => b.addEventListener("click", () => {
-    state.horizonIndex = C.HORIZONS.indexOf(Number(b.dataset.horizon)); setPhase("future");
-  }));
-  $("btn-play").addEventListener("click", () => {
-    // Discrete step only: never interpolates measured growth between phases.
-    const order = ["baseline", "post_rainfall", "future"];
-    if (state.phase !== "future") setPhase(order[order.indexOf(state.phase) + 1]);
-    else if (state.horizonIndex < 3) { state.horizonIndex += 1; setPhase("future"); }
-    else { state.horizonIndex = 0; setPhase("baseline"); }
-  });
-
-  function renderFuture() {
-    layers.future.clearLayers();
-    document.querySelectorAll("[data-horizon]").forEach((b) => b.setAttribute("aria-pressed", String(state.phase === "future" && Number(b.dataset.horizon) === C.HORIZONS[state.horizonIndex])));
-    if (state.phase !== "future" || !state.scene || !state.dataset) return;
-    const stage = state.scene.stages[state.horizonIndex];
-    const funded = new Set(state.scene.zones.filter((z) => z.species_id).map((z) => z.sector_id));
-    L.geoJSON(state.dataset.sectors, {
-      filter: (f) => funded.has(f.properties.sector_id),
-      style: () => ({ color: "#f0abfc", weight: 1, dashArray: "2 4", fillColor: "#f0abfc", fillOpacity: 0.08 + 0.5 * stage.visible_fraction_of_expected }),
-      onEachFeature: (f, layer) => layer.bindTooltip("AI-generated future scenario · " + stage.stage_label.replace("_", " ") + " · +" + stage.horizon_months + " months"),
-    }).addTo(layers.future);
-  }
-
-  // ---------------------------------------------------------------- sectors (M4)
-  function features() { return state.dataset ? state.dataset.sectors.features : []; }
-  function renderSectorList() {
-    const wrap = $("sector-list");
-    wrap.replaceChildren(...features().map((f) => el("button", { class: "btn", type: "button", "aria-pressed": String(f.properties.sector_id === state.selectedSector),
-      onclick: () => selectSector(f.properties.sector_id) }, f.properties.sector_id)));
-  }
-  function sectorEvidence(sid, term) {
-    return state.evidence.map((m) => {
-      const s = m.sectors.find((x) => x.sector_id === sid);
-      return { t: m.product.start_time_utc, v: s && s[term + "_db"] ? s[term + "_db"].median : null, mode: m.data_mode, cov: s ? s.coverage_status : "unknown_coverage" };
-    });
-  }
-  function selectSector(sid) { state.selectedSector = sid; drawSectors(false); renderSectorList(); renderSectorCard(); renderSarChart(); showTab("sector"); }
-  function renderSectorCard() {
-    const card = $("sector-card");
-    const f = features().find((x) => x.properties.sector_id === state.selectedSector);
-    if (!f) { card.textContent = "Select a sector on the map or in the list."; return; }
-    const p = f.properties;
-    const e = eligibilityOf(p.sector_id);
-    const sp = state.species.find((s) => s.species_id === p.species_candidate);
-    const rows = [
-      ["Area", C.quantityText(p.area_ha), p.area_ha],
-      ["Declared area", C.quantityText(p.declared_area_ha), p.declared_area_ha],
-      ["Slope", C.quantityText(p.slope_percent), p.slope_percent],
-      ["Dielectric constant", C.quantityText(p.dielectric_er), p.dielectric_er],
-      ["σ0 HH (imported)", C.quantityText(p.sigma_hh_db), p.sigma_hh_db],
-      ["σ0 HV (imported)", C.quantityText(p.sigma_hv_db), p.sigma_hv_db],
-      ["RVI", C.quantityText(p.rvi), p.rvi],
-    ];
-    const hv = sectorEvidence(p.sector_id, "HVHV").filter((x) => x.v !== null);
-    const tbl = el("table", {}, el("tr", {}, el("th", {}, "Field"), el("th", {}, "Value"), el("th", {}, "Evidence")));
-    for (const [k, v, q] of rows) tbl.append(el("tr", {}, el("td", {}, k), el("td", {}, v), el("td", {}, badge(q.evidence_class))));
-    for (const x of hv) tbl.append(el("tr", {}, el("td", {}, "Backscatter HV median (" + (x.t || "?").slice(0, 10) + ")"), el("td", {}, x.v + " dB"),
-      el("td", {}, badge("derived"), x.mode === "real" ? "" : el("span", { class: "badge mode-fixture" }, "fixture"))));
-    card.replaceChildren(
-      el("div", { class: "flex flex-wrap items-center gap-2" }, el("strong", {}, p.sector_name), el("span", { class: "muted" }, p.sector_id),
-        el("span", { class: "badge " + (p.data_mode === "real" ? "mode-real" : "mode-fixture") }, p.data_mode === "real" ? "Imported" : "Synthetic polygon")),
-      el("p", { class: "text-xs muted" }, p.boundary_note),
-      el("p", { class: "text-xs" }, e ? (e.status === "eligible" ? "Candidate planting sector · " : e.status.replaceAll("_", " ") + " · ") + e.reasons.join(" ") :
-        (p.exclusion_reason ? "Excluded: " + p.exclusion_reason : "Compute a plan to evaluate eligibility. Field assessment required.")),
-      tbl,
-      el("p", { class: "text-xs mt-1" }, "Species candidate: " + (sp ? sp.common_name + " — " + (sp.supplied_taxon || "taxon unspecified") + " · " + sp.review_status.replaceAll("_", " ") : "none")),
-      ...(p.warnings || []).map((w) => el("p", { class: "text-xs", style: "color:var(--amber)" }, "Warning: " + w)),
-      el("p", { class: "text-xs muted" }, "Erosion reduction, retained sediment, carbon, survival and protected homes: Not estimated."));
-  }
-  function renderSarChart() {
-    const sid = state.selectedSector;
-    const ctx = $("chart-sar");
-    if (charts.sar) charts.sar.destroy();
-    const hh = sid ? sectorEvidence(sid, "HHHH") : [];
-    const hv = sid ? sectorEvidence(sid, "HVHV") : [];
-    charts.sar = new Chart(ctx, {
-      type: "line",
-      data: { labels: hh.map((x) => (x.t || "?").slice(0, 10)),
-        datasets: [{ label: "HH median (dB)", data: hh.map((x) => x.v), borderColor: "#22d3ee", spanGaps: false },
-                   { label: "HV median (dB)", data: hv.map((x) => x.v), borderColor: "#34d399", spanGaps: false }] },
-      options: { animation: reduceMotion ? false : { duration: 300 }, plugins: { legend: { labels: { color: "#e6edf6" } },
-        title: { display: true, color: "#9fb0c6", text: hh.length ? "Backscatter by acquisition date (" + (state.evidence.some((m) => m.data_mode !== "real") ? "includes synthetic fixtures" : "derived") + ")" : "No processed acquisitions" } },
-        scales: { y: { title: { display: true, text: "dB", color: "#9fb0c6" }, ticks: { color: "#9fb0c6" } }, x: { ticks: { color: "#9fb0c6" } } } },
-    });
-  }
-
-  // ---------------------------------------------------------------- planning (M4/M5/M6)
-  function renderSpeciesAssign() {
-    const wrap = $("species-assign");
-    wrap.replaceChildren(el("div", { class: "text-xs muted mb-1" }, "Candidate species per sector (source candidates, not approved prescriptions)"));
-    for (const f of features()) {
-      const p = f.properties;
-      if (p.exclusion_reason) continue;
-      const sel = el("select", { id: "sp-" + p.sector_id, "aria-label": "Species for " + p.sector_name });
-      sel.append(el("option", { value: "" }, "None"));
-      for (const s of state.species) sel.append(el("option", { value: s.species_id }, s.common_name + (s.supplied_taxon ? " (" + s.supplied_taxon + ")" : " (taxon unspecified)")));
-      sel.value = state.species.some((s) => s.species_id === p.species_candidate) ? p.species_candidate : "";
-      sel.addEventListener("change", () => resetDependents("plan_inputs"));
-      wrap.append(el("div", { class: "grid grid-cols-2 gap-2 items-center mb-1" }, el("label", { for: sel.id }, p.sector_id + " · " + p.sector_name), sel));
-    }
-  }
-  function num(id) { const v = $(id).value; return v === "" ? null : Number(v); }
-  function setMode(mode) {
-    state.mode = mode;
-    $("mode-budget").setAttribute("aria-pressed", String(mode === "budget"));
-    $("mode-target").setAttribute("aria-pressed", String(mode === "target"));
-    $("wrap-budget").classList.toggle("hidden", mode !== "budget");
-    $("wrap-target").classList.toggle("hidden", mode !== "target");
-    resetDependents("plan_inputs");
-  }
-  $("mode-budget").addEventListener("click", () => setMode("budget"));
-  $("mode-target").addEventListener("click", () => setMode("target"));
-  document.querySelectorAll("#tab-plan input, #tab-establish input, #tab-drone input[type=number]").forEach((i) => i.addEventListener("change", () => resetDependents("plan_inputs")));
-
-  function planRequest() {
-    const species = {};
-    for (const f of features()) {
-      const s = $("sp-" + f.properties.sector_id);
-      if (s && s.value) species[f.properties.sector_id] = s.value;
-    }
-    const req = {
-      scenario_id: state.scenarioId, dataset_version: state.dataset.summary.dataset_version, mode: state.mode,
-      budget_pen: state.mode === "budget" ? num("in-budget") : null,
-      target_established_plants: state.mode === "target" ? num("in-target") : null,
-      species_by_sector: species,
-      assumptions: { target_density_plants_per_ha: num("a-density"), seeds_per_capsule: num("a-spc"), germination_fraction: num("a-germ"),
-        establishment_fraction: num("a-est"), capsule_cost_pen: num("a-capcost"), delivery_cost_per_ha_pen: num("a-deliv"),
-        maintenance_cost_per_ha_pen: num("a-maint"), monitoring_fixed_cost_pen: num("a-monit"), max_slope_percent: num("in-maxslope") },
-      drone: { payload_capsules_per_sortie: num("d-payload"), max_route_m_per_sortie: num("d-route"), node_spacing_m: num("d-spacing"), no_go_buffer_m: num("d-buffer") },
-      reference_date: $("in-refdate").value || "2026-03-15",
-      establishment_half_life_days: num("in-halflife"),
-    };
-    if (state.imported) req.imported_dataset_version = state.imported.dataset_version;
-    return req;
-  }
-
-  $("btn-plan").addEventListener("click", async () => {
-    const statusEl = $("plan-status");
-    resetDependents("plan_inputs");
-    const tok = guard.issue("plan", null);
-    statusEl.textContent = "Computing plan…";
-    try {
-      const plan = await api("/api/plans", { method: "POST", body: JSON.stringify(planRequest()) });
-      if (!guard.accept(tok, null)) return;
-      state.plan = plan; state.planVersion = plan.plan_version;
-      statusEl.textContent = "Plan version " + plan.plan_version + " (dataset " + plan.dataset_version + "). Map, charts, AR and report now use this version.";
-      announce("Plan " + plan.plan_version + " computed.");
-    } catch (e) {
-      const details = e.body && e.body.details ? " " + e.body.details.join("; ") : "";
-      statusEl.textContent = "Plan not computed: " + e.message + details;
-    }
-    drawSectors(false); renderSectorCard(); renderPlan(); renderScene(); renderReport();
-  });
-
-  function renderPlan() {
-    const out = $("plan-results");
-    const est = $("establish-results");
-    const dr = $("drone-results");
-    layers.drone.clearLayers();
-    if (charts.plan) { charts.plan.destroy(); charts.plan = null; }
-    if (charts.est) { charts.est.destroy(); charts.est = null; }
-    $("btn-scene").disabled = true; $("btn-report").disabled = true;
-    if (!state.plan) { out.replaceChildren(); est.replaceChildren(); dr.textContent = "Compute a plan to see the deposition plan."; return; }
-    const b = state.plan.budget;
-    const funded = b.allocations.some((a) => a.capsules > 0);
-    $("btn-scene").disabled = !funded; $("btn-report").disabled = false;
-    $("scene-status").textContent = funded ? "Ready to generate for plan " + state.planVersion + "." : "Prerequisite: at least one funded sector.";
-    const tbl = el("table", {}, el("tr", {}, ...["Sector", "Status", "Capsules", "Seeds released", "Expected germinated", "Expected established", "Cost"].map((h) => el("th", {}, h))));
-    for (const a of b.allocations) {
-      const e = eligibilityOf(a.sector_id);
-      tbl.append(el("tr", {}, el("td", {}, a.sector_id), el("td", {}, e ? e.status.replaceAll("_", " ") : ""), el("td", {}, C.formatCount(a.capsules)),
-        el("td", {}, C.formatCount(a.seeds_released)), el("td", {}, C.formatCount(a.expected_germinated)), el("td", {}, C.formatCount(a.expected_established)),
-        el("td", {}, C.formatPEN(a.total_cost_cents))));
-    }
-    out.replaceChildren(
-      el("div", { class: "flex flex-wrap gap-2 mb-1" }, badge("modeled", "modeled under illustrative assumptions"),
-        el("span", { class: "badge " + (b.feasible ? "mode-real" : "mode-blocked") }, b.feasible ? "Feasible" : "Infeasible")),
-      b.feasible ? null : el("p", { class: "text-xs", style: "color:var(--red)" }, b.infeasibility_reason),
-      el("p", { class: "text-xs" }, "Total " + C.formatPEN(b.total_cost_cents) + (b.budget_cents !== null ? " of " + C.formatPEN(b.budget_cents) + " · remaining " + C.formatPEN(b.remaining_cents) : "") +
-        " · includes fixed monitoring " + C.formatPEN(b.monitoring_fixed_cost_cents) + "."),
-      tbl,
-      el("p", { class: "text-xs muted mt-1" }, b.objective),
-      el("p", { class: "text-xs muted" }, b.note));
-    const t = b.totals;
-    charts.plan = new Chart($("chart-plan"), {
-      type: "bar",
-      data: { labels: ["Seeds released", "Expected germinated", "Expected established"],
-        datasets: [{ label: "Count (plan " + state.planVersion + ")", data: [t.seeds_released, t.expected_germinated, t.expected_established], backgroundColor: ["#fb923c", "#a3e635", "#34d399"] }] },
-      options: { animation: reduceMotion ? false : { duration: 300 }, plugins: { legend: { labels: { color: "#e6edf6" } },
-        title: { display: true, color: "#9fb0c6", text: "Seeds are not plants: separate planning quantities (count)" } },
-        scales: { y: { title: { display: true, text: "count", color: "#9fb0c6" }, ticks: { color: "#9fb0c6" } }, x: { ticks: { color: "#9fb0c6" } } } },
-    });
-    // M6
-    const es = state.plan.establishment;
-    est.replaceChildren(el("div", { class: "flex gap-2 mb-1" }, badge(es.evidence_class, es.status === "not_estimated" ? "Not estimated" : "Sensitivity scenario")),
-      el("p", { class: "text-xs" }, es.note), el("p", { class: "text-xs muted" }, "Reference date " + es.reference_date + ": " + es.reference_date_meaning),
-      el("p", { class: "text-xs muted" }, "Model: " + es.model));
-    if (es.status === "sensitivity_scenario") {
-      charts.est = new Chart($("chart-establish"), {
-        type: "line",
-        data: { labels: es.points.map((p) => "+" + p.delay_days + " d (" + p.planting_date + ")"),
-          datasets: [{ label: "Low (half-life ×0.5)", data: es.points.map((p) => p.low), borderColor: "#f87171" },
-                     { label: "Central", data: es.points.map((p) => p.central), borderColor: "#fbbf24" },
-                     { label: "High (half-life ×2)", data: es.points.map((p) => p.high), borderColor: "#34d399" }] },
-        options: { animation: reduceMotion ? false : { duration: 300 }, plugins: { legend: { labels: { color: "#e6edf6" } },
-          title: { display: true, color: "#9fb0c6", text: "Expected established plants by planting delay — not a survival probability" } },
-          scales: { y: { title: { display: true, text: "plants (count)", color: "#9fb0c6" }, ticks: { color: "#9fb0c6" } }, x: { ticks: { color: "#9fb0c6" } } } },
-      });
-    }
-    // Drone extension
-    const d = state.plan.drone;
-    const list = el("ul", { class: "text-xs list-disc pl-4" }, ...d.unverified_constraints.map((c) => el("li", {}, c)));
-    dr.replaceChildren(el("div", { class: "flex flex-wrap gap-2 mb-1" }, el("span", { class: "badge mode-fixture" }, d.status.replaceAll("_", " ")), el("span", { class: "badge mode-blocked" }, "Not executed")),
-      el("p", { class: "text-xs" }, d.purpose), d.infeasibility_reason ? el("p", { class: "text-xs", style: "color:var(--red)" }, d.infeasibility_reason) : null,
-      el("p", { class: "text-xs" }, C.formatCount(d.total_capsules) + " capsules over " + d.nodes.length + " deposition nodes in " + d.sorties.length + " candidate sortie(s)."),
-      el("p", { class: "text-xs muted" }, "Unverified constraints:"), list, el("p", { class: "text-xs muted" }, d.note));
-    if ($("drone-toggle").checked && d.nodes.length) {
-      const byS = {};
-      for (const n of d.nodes) (byS[n.sortie] = byS[n.sortie] || []).push(n);
-      for (const [sortie, ns] of Object.entries(byS)) {
-        const pts = [[d.launch_lat, d.launch_lon], ...ns.map((n) => [n.lat, n.lon]), [d.launch_lat, d.launch_lon]];
-        L.polyline(pts, { color: "#fb923c", weight: 1, dashArray: "3 5", opacity: 0.7 }).bindTooltip("Candidate sortie " + sortie + " — not executed").addTo(layers.drone);
-      }
-      for (const n of d.nodes) L.circleMarker([n.lat, n.lon], { radius: 2.5, color: "#fb923c", weight: 1, fillOpacity: 0.9 }).bindTooltip(n.node_id + ": " + n.capsules + " capsules (proposed)").addTo(layers.drone);
-      L.marker([d.launch_lat, d.launch_lon], { title: "Candidate launch point" }).bindTooltip("Candidate launch point (unverified)").addTo(layers.drone);
-    }
-  }
-  $("drone-toggle").addEventListener("change", renderPlan);
-
-  // ---------------------------------------------------------------- AI scene (M8)
-  $("btn-scene").addEventListener("click", async () => {
-    if (!state.planVersion) return;
-    $("btn-scene").disabled = true; $("btn-scene-cancel").disabled = false;
-    state.scene = null; renderScene();
-    const st = await runJob("scene", "/api/scenes", { plan_version: state.planVersion }, $("scene-status"), (st) => {
-      state.sceneJob = st;
-      if (st.state === "ready" && st.result) {
-        const errs = C.validateScene(st.result, state.planVersion);
-        if (errs.length) { $("scene-status").textContent = "Scene rejected by client validation: " + errs.join(" "); return; }
-        state.scene = st.result;
-        announce("Future scene " + st.result.scene_version + " ready.");
-      }
-    });
-    if (st && st.job_id) state.sceneJob = st;
-    $("btn-scene-cancel").disabled = true; $("btn-scene").disabled = !state.plan;
-    renderScene(); renderFuture(); renderReport();
-  });
-  $("btn-scene-cancel").addEventListener("click", async () => {
-    const st = state.sceneJob;
-    guard.invalidate("scene");
-    if (st && st.job_id) { try { await api("/api/jobs/" + st.job_id + "/cancel", { method: "POST" }); } catch (_) {} }
-    $("scene-status").textContent = "Cancelled."; $("btn-scene-cancel").disabled = true; $("btn-scene").disabled = !state.plan;
-  });
-
-  function renderScene() {
-    const out = $("scene-summary");
-    const ready = !!state.scene;
-    $("btn-ar").disabled = !ready; $("btn-preview").disabled = !ready;
-    if (!ready) { out.replaceChildren(); return; }
-    const s = state.scene;
-    const inf = s.inference;
-    out.replaceChildren(
-      el("div", { class: "flex flex-wrap gap-2 mb-1" },
-        el("span", { class: "badge " + (inf.mode === "actual_inference" ? "ev-ai_generated" : "mode-fixture") }, inf.mode === "actual_inference" ? "AI-generated future scenario" : "FIXTURE — not actual AI inference"),
-        el("span", { class: "badge ev-illustrative" }, "Scenario, not a forecast")),
-      el("p", {}, el("strong", {}, s.title)),
-      el("p", { class: "text-xs muted" }, "Scene " + s.scene_version + " · plan " + s.plan_version + " · " + inf.provider + " / " + inf.model +
-        (inf.response_id ? " · response " + inf.response_id : "") + (inf.latency_ms !== null ? " · " + inf.latency_ms + " ms" : "") + " · attempts " + inf.attempts),
-      el("p", { class: "text-xs" }, inf.note),
-      el("ul", { class: "text-xs list-disc pl-4" }, ...s.stages.map((st) => el("li", {}, "+" + st.horizon_months + " mo · " + st.stage_label.replaceAll("_", " ") + " · " + st.caption))),
-      el("p", { class: "text-xs muted" }, s.uncertainty_note),
-      el("p", { class: "text-xs muted" }, s.labels.scale + ". " + s.labels.marker + ". " + s.frame.terrain),
-      el("p", { class: "text-xs muted" }, "Assumptions: " + s.assumptions.join(" · ")));
-  }
-
-  // ---------------------------------------------------------------- report (M7)
-  $("btn-report").addEventListener("click", async () => {
-    if (!state.planVersion) return;
-    $("btn-report").disabled = true;
-    const sceneJobId = state.scene && state.sceneJob ? state.sceneJob.job_id : null;
-    await runJob("report", "/api/reports", { plan_version: state.planVersion, scene_job_id: sceneJobId }, $("report-status"), (st) => {
-      if ((st.state === "ready" || st.state === "partial") && st.result) state.report = st.result;
-    });
-    $("btn-report").disabled = !state.plan;
-    renderReport();
-  });
-  function reportDom(r, forPrint) {
-    const root = el("div", {});
-    root.append(el("p", { class: forPrint ? "watermark" : "badge mode-fixture" }, r.status_label));
-    root.append(el("h3", { class: "font-bold mt-1" }, r.title));
-    root.append(el("p", { class: "text-xs muted" }, "Report " + r.report_version + " · plan " + r.plan_version + " · scene " + (r.scene_version || "none") + " · AI narrative: " +
-      (r.ai_status === "actual_inference" ? "actual inference (" + r.inference.model + ")" : r.ai_status === "fixture" ? "FIXTURE, not actual AI" : "not generated" + (r.ai_error ? " — " + r.ai_error : "")) + " · created " + r.created_at + " UTC"));
-    const titles = { scope: "Scope", summary: "Summary", quantities: "Planned quantities", scene: "Future scene", field_checks: "Field checks", monitoring: "Monitoring protocol", risks: "Risks", limitations: "Limitations" };
-    for (const key of ["scope", "summary", "quantities", "scene", "field_checks", "monitoring", "risks", "limitations"]) {
-      const sec = r.sections[key];
-      if (!sec) continue;
-      root.append(el("h4", { class: "font-semibold mt-2" }, titles[key]));
-      const ul = el("ul", { class: "list-disc pl-4" });
-      for (const s of sec) ul.append(el("li", {}, s.text + " ", el("span", { class: "badge ev-" + (s.authorship === "ai_generated" ? "ai_generated" : s.authorship === "modeled" ? "modeled" : s.authorship === "illustrative" ? "illustrative" : "observed") }, s.authorship.replaceAll("_", " "))));
-      root.append(ul);
-    }
-    const tb = (rows, cols, title) => {
-      root.append(el("h4", { class: "font-semibold mt-2" }, title));
-      const t = el("table", {}, el("tr", {}, ...cols.map((c) => el("th", {}, c[1]))));
-      for (const row of rows) t.append(el("tr", {}, ...cols.map((c) => el("td", {}, row[c[0]] === null || row[c[0]] === undefined ? "Unknown" : String(row[c[0]])))));
-      root.append(t);
-    };
-    tb(r.tables.sectors, [["sector_id", "Sector"], ["sector_name", "Name"], ["data_mode", "Data"], ["eligibility", "Eligibility"], ["area_ha", "Area (ha)"], ["slope_percent", "Slope (%)"], ["slope_evidence", "Slope evidence"], ["lat", "Lat"], ["lon", "Lon"], ["utm", "UTM"], ["seeds_released", "Seeds"], ["expected_established", "Expected established"], ["cost", "Cost"]], "Sectors (coordinates: representative point, WGS 84)");
-    tb(r.tables.budget, [["item", "Budget item"], ["value", "Amount"]], "Budget breakdown");
-    tb(r.tables.assumptions, [["assumption", "Assumption"], ["value", "Value"]], "Assumptions (illustrative unless reviewed)");
-    tb(r.tables.establishment, [["delay_days", "Delay (days)"], ["planting_date", "Planting date"], ["low", "Low"], ["central", "Central"], ["high", "High"]], "Delay sensitivity (not survival probabilities)");
-    if (state.evidence.length) {
-      root.append(el("h4", { class: "font-semibold mt-2" }, "Evidence sources"));
-      const ul = el("ul", { class: "list-disc pl-4" });
-      for (const m of state.evidence) ul.append(el("li", {}, (m.product.granule_id || "?") + " · acquired " + (m.product.start_time_utc || "?") + " UTC · " + m.data_mode + " · " + m.product.backscatter_normalization));
-      root.append(ul);
-    }
-    root.append(el("p", { class: "text-xs mt-2" }, "Map legend: green = candidate planting sector; amber = field assessment required; red = excluded/no-go; orange = proposed seed deposition node; violet = AI-generated future scenario."));
-    root.append(el("p", { class: "text-xs mt-1" }, "This draft is not an official approved dossier, regulatory submission or certified statement. Relevant institutions such as SERFOR or CENEPRED have not reviewed or endorsed it."));
-    return root;
-  }
-  function renderReport() {
-    const out = $("report-view");
-    $("btn-report").disabled = !state.plan;
-    $("btn-print").disabled = !state.report;
-    if (!state.report || state.report.plan_version !== state.planVersion) { state.report = null; out.replaceChildren(); $("btn-print").disabled = true; return; }
-    out.replaceChildren(reportDom(state.report, false));
-  }
-  $("btn-print").addEventListener("click", () => {
-    if (!state.report) return;
-    $("print-area").replaceChildren(reportDom(state.report, true));
-    window.print();
-  });
-
-  // ---------------------------------------------------------------- GIS import connector
-  async function normalizeAndUse(geojson, label) {
-    const statusEl = $("gis-status");
-    const scenarioAtStart = state.scenarioId;
-    try {
-      const out = await api("/api/gis/normalize", { method: "POST", body: JSON.stringify({ scenario_id: state.scenarioId, source_label: label, geojson }) });
-      if (scenarioAtStart !== state.scenarioId) return; // scenario changed while importing
-      resetDependents("dataset");
-      state.imported = out;
-      state.dataset = Object.assign({}, state.dataset, { sectors: out.sectors, summary: Object.assign({}, state.dataset.summary, { dataset_version: out.dataset_version, data_mode: "real" }) });
-      updateDataBadge(); drawSectors(true); renderSectorList(); renderSpeciesAssign(); await loadEvidence();
-      statusEl.textContent = "Imported " + out.sectors.features.length + " sector(s) from " + label + "; " + out.rejected.length + " rejected. " + out.warnings.join(" ") +
-        (out.rejected.length ? " Rejected: " + out.rejected.slice(0, 5).map((r) => "#" + r.index + " " + r.reason).join("; ") : "");
-    } catch (e) {
-      const details = e.body && e.body.details ? " " + e.body.details.slice(0, 5).join("; ") : "";
-      statusEl.textContent = "Import failed; the current plan is unchanged. " + e.message + details;
-    }
-  }
-  // Public connector requested by the source specification.
-  async function loadArcGISGeoJSON(url) {
-    const statusEl = $("gis-status");
-    let u;
-    try { u = new URL(url); } catch (_) { statusEl.textContent = "Invalid URL."; return null; }
-    if (u.protocol !== "https:" && u.hostname !== "localhost") { statusEl.textContent = "Use an HTTPS URL."; return null; }
-    statusEl.textContent = "Fetching GeoJSON…";
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20000);
-      const res = await fetch(u.toString(), { signal: ctrl.signal, credentials: "omit" });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const text = await res.text();
-      if (text.length > 5 * 1024 * 1024) throw new Error("GeoJSON exceeds 5 MB.");
-      return await normalizeAndUse(JSON.parse(text), u.hostname);
-    } catch (e) {
-      statusEl.textContent = "Could not load the URL (" + e.message + "). The server must allow CORS; otherwise download the file and use “Load file”.";
-      return null;
-    }
-  }
-  window.loadArcGISGeoJSON = loadArcGISGeoJSON;
-  $("btn-gis-url").addEventListener("click", () => loadArcGISGeoJSON($("gis-url").value.trim()));
-  $("gis-file").addEventListener("change", async (ev) => {
-    const f = ev.target.files[0];
-    if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { $("gis-status").textContent = "File exceeds 5 MB."; return; }
-    try { await normalizeAndUse(JSON.parse(await f.text()), f.name); }
-    catch (e) { $("gis-status").textContent = "Not valid JSON: " + e.message; }
-    ev.target.value = "";
-  });
-  $("btn-gis-reset").addEventListener("click", () => selectScenario(state.scenarioId));
-
-  // ---------------------------------------------------------------- tabs
-  function showTab(name) {
-    document.querySelectorAll("[role=tab]").forEach((t) => {
-      const on = t.id === "t-" + name;
-      t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1;
-      $(t.getAttribute("aria-controls")).hidden = !on;
-    });
-  }
-  document.querySelectorAll("[role=tab]").forEach((t, i, all) => {
-    t.addEventListener("click", () => showTab(t.id.slice(2)));
-    t.addEventListener("keydown", (e) => {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      const next = all[(i + (e.key === "ArrowRight" ? 1 : all.length - 1)) % all.length];
-      next.focus(); showTab(next.id.slice(2));
-    });
-  });
-
-  // ---------------------------------------------------------------- AR (M8)
-  const AR_LIBS = ["https://aframe.io/releases/1.6.0/aframe.min.js", "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"];
-  let arLibsPromise = null;
-  function loadScript(src) {
-    return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Failed to load " + src)); document.head.append(s); });
-  }
-  function loadArLibs(withMindar) {
-    if (!arLibsPromise) arLibsPromise = loadScript(AR_LIBS[0]).then(registerComponents);
-    return withMindar ? arLibsPromise.then(() => (window.MINDAR && window.MINDAR.IMAGE ? null : loadScript(AR_LIBS[1]))) : arLibsPromise;
-  }
-  const AR_TEXT = {
-    idle: "Idle", capability_check: "Checking camera support…", permission_request: "Waiting for camera permission…",
-    registering: "Point the camera at the printed RAÍZ-SAR AI target.", active: "Tracking the target. Scene registered to the tabletop target.",
-    tracking_lost: "Target lost — hold the target in view. Overlays are hidden until registration returns.",
-    preview: "3D PREVIEW — not AR. No camera registration.", unsupported: "Camera AR is not supported in this browser or context (HTTPS or localhost required).",
-    permission_denied: "Camera permission denied. Use the 3D preview or allow the camera and retry.", failed: "AR failed to start.", ended: "AR session ended.",
-  };
-  function arEvent(evt, detail) {
-    const prev = state.ar;
-    state.ar = C.arTransition(state.ar, evt);
-    $("ar-state").textContent = AR_TEXT[state.ar] + (detail ? " " + detail : "");
-    document.body.dataset.arState = state.ar;
-    if (state.ar === "ended" && prev !== "ended") teardownAr();
-    const anchor = document.querySelector("#raiz-root");
-    if (anchor && anchor.object3D && state.ar === "tracking_lost") anchor.object3D.visible = false;
-    if (anchor && anchor.object3D && (state.ar === "active" || state.ar === "preview")) anchor.object3D.visible = true;
-  }
-
-  function registerComponents() {
-    const AF = window.AFRAME;
-    if (!AF || AF.components["raiz-scene"]) return;
-    const THREE = AF.THREE; // A-Frame's bundled three.js; no second global copy is loaded.
-    const colors = { shrub_tree_small: 0x34d399, broad_tree: 0x22c55e, dry_forest_tree: 0x84cc16 };
-    AF.registerComponent("raiz-scene", {
-      init() {
-        this.spec = window.__raizScene;
-        this.stageIndex = 0; this.roots = false; this.evidence = true;
-        this.group = new THREE.Group();
-        this.el.setObject3D("raiz", this.group);
-        this.build();
-      },
-      build() {
-        const s = this.spec, f = s.frame;
-        while (this.group.children.length) this.group.remove(this.group.children[0]);
-        // Target-sized base plane (present reference frame).
-        const base = new THREE.Mesh(new THREE.PlaneGeometry(1, f.target_aspect), new THREE.MeshBasicMaterial({ color: 0x0b1220, transparent: true, opacity: 0.35 }));
-        base.position.z = -0.001; this.group.add(base);
-        this.evidenceMesh = null;
-        if (s.evidence_overlay) {
-          const o = s.evidence_overlay;
-          const tex = new THREE.TextureLoader().load(o.image);
-          const m = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(o.x1 - o.x0), Math.abs(o.y1 - o.y0)), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.6 }));
-          m.position.set((o.x0 + o.x1) / 2, (o.y0 + o.y1) / 2, 0); this.group.add(m); this.evidenceMesh = m;
-        }
-        // Sector outlines: present geometry, coloured by eligibility.
-        for (const z of s.zones) {
-          const pts = z.outline.map(([x, y]) => new THREE.Vector3(x, y, 0.002));
-          const col = z.eligibility === "eligible" ? 0x34d399 : z.eligibility === "excluded" ? 0xf87171 : 0xfbbf24;
-          const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: col }));
-          this.group.add(line);
-        }
-        // Proposed seed deposition (amber discs).
-        const dep = new THREE.InstancedMesh(new THREE.CircleGeometry(0.0035, 8), new THREE.MeshBasicMaterial({ color: 0xfb923c }), Math.max(1, s.deposition_points.length));
-        const m4 = new THREE.Matrix4();
-        s.deposition_points.forEach(([x, y], i) => { m4.makeTranslation(x, y, 0.003); dep.setMatrixAt(i, m4); });
-        dep.count = s.deposition_points.length; this.depositionMesh = dep; this.group.add(dep);
-        // Vegetation markers (procedural, instanced): trunk + canopy, oriented along +z (out of the target).
-        const n = Math.max(1, s.placements.length);
-        const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 1, 6); trunkGeo.rotateX(Math.PI / 2); trunkGeo.translate(0, 0, 0.5);
-        const canopyGeo = new THREE.ConeGeometry(1, 1, 7); canopyGeo.rotateX(Math.PI / 2); canopyGeo.translate(0, 0, 0.5);
-        this.trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshBasicMaterial({ color: 0x8b5a2b }), n);
-        this.canopies = new THREE.InstancedMesh(canopyGeo, new THREE.MeshBasicMaterial({ vertexColors: false }), n);
-        this.canopies.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-        this.rootsMesh = new THREE.InstancedMesh((() => { const g = new THREE.ConeGeometry(1, 1, 6); g.rotateX(-Math.PI / 2); g.translate(0, 0, -0.5); return g; })(),
-          new THREE.MeshBasicMaterial({ color: 0xa16207, transparent: true, opacity: 0.45 }), n);
-        // Instance counts change per stage; a bounding sphere computed at count 0 would cull them forever.
-        for (const mesh of [this.trunks, this.canopies, this.rootsMesh, dep]) mesh.frustumCulled = false;
-        this.group.add(this.trunks, this.canopies, this.rootsMesh);
-        this.applyStage();
-        // Clickable zone hit areas (A-Frame entities so the cursor/raycaster can target them).
-        for (const old of this.el.querySelectorAll(".raiz-zone")) old.remove();
-        s.zones.forEach((z, i) => {
-          const e = document.createElement("a-entity");
-          e.setAttribute("class", "raiz-zone clickable");
-          e.setAttribute("raiz-zone", "index: " + i);
-          this.el.appendChild(e);
-        });
-      },
-      applyStage() {
-        const s = this.spec, f = s.frame;
-        const stage = s.stages[this.stageIndex];
-        const vis = window.RaizCore.visiblePlacements(s.placements, stage);
-        const h = window.RaizCore.markerHeight(stage, f);
-        const r = Math.max(0.002, (stage.canopy_radius_m * f.vertical_exaggeration) / f.meters_per_ar_unit);
-        const m = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color();
-        let i = 0;
-        for (const p of vis) {
-          const th = h * 0.45;
-          m.compose(new THREE.Vector3(p.x, p.y, 0.003), q, new THREE.Vector3(r * 0.6, r * 0.6, Math.max(th, 1e-4)));
-          this.trunks.setMatrixAt(i, m);
-          m.compose(new THREE.Vector3(p.x, p.y, 0.003 + th), q, new THREE.Vector3(r, r, Math.max(h - th, 1e-4)));
-          this.canopies.setMatrixAt(i, m);
-          col.setHex(colors[p.asset_id] || 0x34d399); this.canopies.setColorAt(i, col);
-          m.compose(new THREE.Vector3(p.x, p.y, 0), q, new THREE.Vector3(r * 0.7, r * 0.7, Math.max(h * 0.6, 1e-4)));
-          this.rootsMesh.setMatrixAt(i, m);
-          i++;
-        }
-        this.trunks.count = i; this.canopies.count = i; this.rootsMesh.count = (this.roots && stage.horizon_months >= 6) ? i : 0;
-        this.trunks.instanceMatrix.needsUpdate = true; this.canopies.instanceMatrix.needsUpdate = true; this.rootsMesh.instanceMatrix.needsUpdate = true;
-        if (this.canopies.instanceColor) this.canopies.instanceColor.needsUpdate = true;
-        this.depositionMesh.visible = stage.horizon_months === 0 || this.stageIndex === 0;
-        if (this.evidenceMesh) this.evidenceMesh.visible = this.evidence;
-        $("ar-caption").textContent = "+" + stage.horizon_months + " months · " + stage.stage_label.replaceAll("_", " ") + " · " + stage.caption + " · " + vis.length + " markers" +
-          (this.roots && stage.horizon_months >= 6 ? " · " + s.labels.roots : "");
-        document.querySelectorAll("[data-ar-h]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.arH) === this.stageIndex)));
-        document.body.dataset.arStage = String(this.stageIndex);
-        document.body.dataset.arVisible = String(vis.length);
-      },
-      setStage(i) { this.stageIndex = Math.max(0, Math.min(3, i)); this.applyStage(); },
-      setRoots(on) { this.roots = on; this.applyStage(); },
-      setEvidence(on) { this.evidence = on; this.applyStage(); },
-    });
-    AF.registerComponent("raiz-zone", {
-      schema: { index: { type: "int" } },
-      init() {
-        const z = window.__raizScene.zones[this.data.index];
-        const shape = new THREE.Shape(z.outline.map(([x, y]) => new THREE.Vector2(x, y)));
-        const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.02, depthWrite: false }));
-        mesh.position.z = 0.0025;
-        this.el.setObject3D("mesh", mesh);
-        this.el.addEventListener("click", () => {
-          const sp = z.species_id ? " · species " + z.species_id : "";
-          $("ar-zone-info").textContent = z.sector_name + " (" + z.sector_id + ") · " + z.eligibility.replaceAll("_", " ") + sp +
-            " · seeds released " + C.formatCount(z.seeds_released) + " · expected established " + C.formatCount(z.expected_established) + " (illustrative assumptions)";
-          document.body.dataset.arZone = z.sector_id;
-        });
-      },
-    });
-  }
-
-  function sceneComponent() { const e = document.querySelector("[raiz-scene]"); return e && e.components["raiz-scene"]; }
-  document.querySelectorAll("[data-ar-h]").forEach((b) => b.addEventListener("click", () => { const c = sceneComponent(); if (c) c.setStage(Number(b.dataset.arH)); }));
-  $("btn-ar-roots").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = sceneComponent(); if (c) c.setRoots(on); });
-  $("btn-ar-evidence").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = sceneComponent(); if (c) c.setEvidence(on); });
-
-  function openOverlay() {
-    $("ar-overlay").classList.add("open");
-    const s = state.scene;
-    $("ar-labels").textContent = [s.labels.present, s.labels.proposal, s.labels.future, s.labels.scale, s.labels.marker,
-      s.evidence_overlay ? s.evidence_overlay.label : "No SAR evidence layer"].join(" · ");
-    $("btn-ar-exit").focus();
-  }
-  function teardownAr() {
-    const scene = document.querySelector("#ar-container a-scene");
-    if (scene) {
-      const sys = scene.systems && scene.systems["mindar-image-system"];
-      try { if (sys) sys.stop(); } catch (_) {}
-      scene.remove();
-    }
-    document.querySelectorAll("video").forEach((v) => { if (v.srcObject) v.srcObject.getTracks().forEach((t) => t.stop()); v.remove(); });
-    $("ar-overlay").classList.remove("open");
-    state.ar = "idle"; document.body.dataset.arState = "idle";
-    $("btn-ar").focus();
-  }
-  $("btn-ar-exit").addEventListener("click", () => arEvent("end"));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("ar-overlay").classList.contains("open")) arEvent("end"); });
-
-  $("btn-ar").addEventListener("click", async () => {
-    if (!state.scene) return;
-    const errs = C.validateScene(state.scene, state.planVersion);
-    if (errs.length) { $("scene-status").textContent = "Scene cannot be shown: " + errs.join(" "); return; }
-    window.__raizScene = state.scene;
-    openOverlay();
-    arEvent("start");
-    const secure = window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-    if (!secure) { arEvent("unsupported"); return; }
-    arEvent("supported");
-    // Permission preflight: MindAR reports any camera failure as VIDEO_FAIL, so classify it here first.
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-      stream.getTracks().forEach((t) => t.stop());
-    } catch (e) {
-      if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) arEvent("denied");
-      else arEvent("error", e && e.name === "NotFoundError" ? "No camera was found." : (e && e.message) || "Camera unavailable.");
-      return;
-    }
-    arEvent("granted");
-    try { await loadArLibs(true); } catch (e) { arEvent("error", e.message); return; }
-    const c = $("ar-container");
-    c.replaceChildren();
-    c.insertAdjacentHTML("beforeend",
-      '<a-scene mindar-image="imageTargetSrc: /assets/ar/target.mind; autoStart: true; uiScanning: no; uiLoading: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001" ' +
-      'color-space="sRGB" renderer="colorManagement: true; antialias: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" embedded>' +
-      '<a-camera position="0 0 0" look-controls="enabled: false" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable"></a-camera>' +
-      '<a-entity mindar-image-target="targetIndex: 0" id="raiz-anchor"><a-entity id="raiz-root" raiz-scene></a-entity></a-entity></a-scene>');
-    const scene = c.querySelector("a-scene");
-    scene.addEventListener("arReady", () => { $("ar-state").textContent = AR_TEXT[state.ar] + " Camera running."; document.body.dataset.arReady = "1"; });
-    scene.addEventListener("arError", (ev) => {
-      const name = ev && ev.detail && ev.detail.error ? String(ev.detail.error) : "";
-      arEvent("error", name);
-    });
-    const anchor = c.querySelector("#raiz-anchor");
-    anchor.addEventListener("targetFound", () => arEvent("target_found"));
-    anchor.addEventListener("targetLost", () => arEvent("target_lost"));
-  });
-
-  $("btn-preview").addEventListener("click", async () => {
-    if (!state.scene) return;
-    const errs = C.validateScene(state.scene, state.planVersion);
-    if (errs.length) { $("scene-status").textContent = "Scene cannot be shown: " + errs.join(" "); return; }
-    window.__raizScene = state.scene;
-    openOverlay();
-    arEvent("preview");
-    try { await loadArLibs(false); } catch (e) { $("ar-state").textContent = "3D preview failed: " + e.message; return; }
-    const c = $("ar-container");
-    c.replaceChildren();
-    c.insertAdjacentHTML("beforeend",
-      '<a-scene embedded vr-mode-ui="enabled: false" background="color: #0b1220" renderer="antialias: true">' +
-      '<a-camera position="0 1.6 1.1" look-controls="enabled: false" wasd-controls="enabled: false" cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-camera>' +
-      '<a-entity id="raiz-root" raiz-scene rotation="-55 0 0" position="0 1.35 0"></a-entity></a-scene>');
-    // Drag to rotate the tabletop model (preview only; this is not AR).
-    let drag = null;
-    c.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY }; });
-    window.addEventListener("pointerup", () => { drag = null; });
-    c.addEventListener("pointermove", (e) => {
-      if (!drag) return;
-      const root = document.querySelector("#raiz-root");
-      const r = root.getAttribute("rotation");
-      root.setAttribute("rotation", { x: Math.max(-90, Math.min(0, r.x + (e.clientY - drag.y) * 0.3)), y: r.y, z: r.z + (e.clientX - drag.x) * 0.3 });
-      drag = { x: e.clientX, y: e.clientY };
-    });
-  });
-
-  // ---------------------------------------------------------------- boot
-  async function health() {
-    try {
-      const h = await api("/api/health");
-      state.health = h;
-      const ai = $("badge-ai");
-      ai.className = "badge " + (h.ai.mode === "fixture" ? "mode-fixture" : h.ai.configured ? "mode-real" : "mode-blocked");
-      ai.textContent = h.ai.mode === "fixture" ? "AI: FIXTURE (not inference)" : h.ai.configured ? "AI: " + h.ai.model + " (server)" : "AI: blocked — key not configured";
-      ai.title = h.ai.note;
-      const q = $("badge-queue");
-      q.className = "badge " + (h.queue === "available" || h.queue === "inline" ? "mode-real" : "mode-blocked");
-      q.textContent = "Queue: " + h.queue;
-    } catch (e) { $("badge-ai").textContent = "AI: unknown"; $("badge-queue").textContent = "API unavailable"; }
-  }
-  icons();
-  window.__raiz = { state, C };
-  health();
-  loadScenarios().catch((e) => { $("scenario-note").textContent = "Could not load scenarios: " + e.message; });
-  setPhase("baseline");
-})();
-</script>
+<script type="module" src="/app/main.js"></script>
 </body>
 </html>

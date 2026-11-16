@@ -28,26 +28,32 @@ await page.addInitScript(() => { try { localStorage.setItem("raiz-tour", "done")
 
 await page.goto(BASE);
 await page.waitForFunction(() => document.querySelector("#panel-body") && document.querySelector("#panel-body").innerText.length > 50, null, { timeout: 60000 });
-await page.waitForFunction(() => window.raiz && document.querySelector("#legend").innerText.includes("NISAR"), null, { timeout: 90000 }).catch(() => {});
+check("default_analytical_layers_off", await page.evaluate(() => Object.values(window.raiz.state.imagery).every(v => v === null)));
+check("default_relief_off", await page.evaluate(() => import("/app/map.js").then(M => !M.getMap().getSource("dem"))));
+const nisarBlock = page.locator("#panel-body h3").filter({ hasText: "NISAR radar" }).locator("..");
+await nisarBlock.getByRole("button", { name: "Load available dates", exact: true }).click();
+await page.waitForFunction(() => window.raiz.state.dates.nisar?.length > 0, null, { timeout: 90000 });
+await page.getByLabel("NISAR radar (GCOV) date").selectOption(await page.evaluate(() => window.raiz.state.dates.nisar.at(-1)));
 await wait(4000);
-await page.screenshot({ path: `${OUT}/1-explore.png` });
-check("explore_shows_nisar_layer", (await page.locator("#legend").innerText()).includes("NISAR"), "real NISAR GCOV shown on load");
+await page.screenshot({ path: OUT + "/1-explore.png" });
+check("explore_shows_requested_nisar", (await page.locator("#legend").innerText()).includes("NISAR"), "real NISAR enabled explicitly");
 check("no_osm_public_tiles", ![...hosts].some((h) => h === "tile.openstreetmap.org"), [...hosts].filter((h) => /tile|openfreemap|gibs/.test(h)).join(", "));
 check("no_leaflet_flag", (await page.locator(".leaflet-attribution-flag").count()) === 0);
 
-// Draw a zone with clicks on a slope east of the locator, then close it on the first vertex.
+// Choose 5 vertices, then place them by clicks; the zone closes itself on the last vertex.
 await page.click("text=Draw zones to assess");
-await page.waitForSelector("text=Draw a zone");
+await page.waitForSelector("text=Place the vertices");
 await page.evaluate(() => { const m = window.raiz && null; return m; });
 await page.evaluate(async () => { const M = await import("/app/map.js"); M.getMap().jumpTo({ center: [-80.62, -5.2], zoom: 13 }); });
 await wait(2500);
-await page.click("text=Draw a zone");
+await page.selectOption("#vertex-count", "5");
+await page.click("text=Place the vertices");
 const pts = [[760, 360], [900, 340], [960, 470], [820, 540], [720, 470]];
 for (const [x, y] of pts) { await page.mouse.click(x, y); await wait(250); }
-await page.mouse.click(pts[0][0], pts[0][1]);
 await wait(1200);
-const drawn = await page.evaluate(async () => (await import("/app/state.js")).state.drawn.length);
-check("zone_drawn_by_clicks", drawn === 1, `${drawn} zone(s)`);
+const drawnInfo = await page.evaluate(async () => { const d = (await import("/app/state.js")).state.drawn; return { n: d.length, v: d[0] ? d[0].geometry.coordinates[0].length - 1 : 0 }; });
+check("zone_drawn_by_clicks", drawnInfo.n === 1 && drawnInfo.v === 5, `${drawnInfo.n} zone(s), ${drawnInfo.v} vertices`);
+const drawn = drawnInfo.n;
 await page.screenshot({ path: `${OUT}/2-zone-drawn.png` });
 
 // Suggest a boundary (proposal only) and keep the user's polygon.
@@ -70,7 +76,8 @@ await page.screenshot({ path: `${OUT}/4-confirmed.png` });
 
 await page.click("text=See terrain and radar evidence");
 await page.waitForSelector("#panel-body canvas", { timeout: 30000 }).catch(() => {});
-await wait(4000);
+// The ASF catalog loads asynchronously (cached after the first request): wait for it, not a fixed delay.
+await page.waitForFunction(() => /NISAR GCOV \(L-band\): \d+ acquisition/.test(document.querySelector("#panel-body").innerText), null, { timeout: 60000 }).catch(() => {});
 const evText = await page.locator("#panel-body").innerText();
 check("evidence_slope_chart", (await page.locator("#panel-body canvas").count()) > 0);
 check("evidence_lists_acquisitions", /NISAR GCOV \(L-band\): \d+ acquisition/.test(evText), evText.match(/NISAR GCOV[^\n]*/)?.[0]);
@@ -112,6 +119,19 @@ const shot3d = await page.screenshot({ path: `${OUT}/8-future-3d.png`, timeout: 
 check("terrain_3d_rendered_headless", shot3d, shot3d ? "pitched DEM terrain captured" : "frame not produced within 120 s on software WebGL");
 const terrainOn = await page.evaluate(async () => !!(await import("/app/map.js")).getMap().getTerrain());
 check("terrain_3d_enabled", terrainOn);
+// Before/after 3D views: observed ponding, planted trees, huayco with and without trees.
+for (const [label, key, src] of [["Before: ponding after rain", "before", "twin-water"], ["After: planted trees", "after", "twin-trees"],
+  ["Huayco with the trees", "huayco_trees", "twin-mud"], ["Huayco without the trees", "huayco_none", "twin-mud"]]) {
+  const btn = page.locator("#panel-body button", { hasText: label }).first();
+  if (!(await btn.count())) { check(`twin_view_${key}`, false, "button missing"); continue; }
+  await btn.click().catch(() => {});
+  await page.waitForFunction((s) => import("/app/twin.js").then((T) => T.counts[s] > 0), src, { timeout: 120000 }).catch(() => {});
+  await wait(key.startsWith("huayco") ? 15000 : 2000);
+  const n = await page.evaluate((s) => import("/app/twin.js").then((T) => T.counts[s]), src);
+  const msg = await page.locator("#panel-body .status, #panel-body [role=status]").last().innerText().catch(() => "");
+  check(`twin_view_${key}`, n > 0 || /no surface water|cloud/i.test(msg), `${n} features; ${msg.slice(0, 140)}`);
+  await page.screenshot({ path: `${OUT}/8-twin-${key}.png`, timeout: 120000 }).catch(() => {});
+}
 await page.locator("button#btn-3d").click().catch(() => {});
 await wait(1500);
 

@@ -31,6 +31,7 @@ export const state = {
   overview: null,          // focus-area overview: {key, landscape, nisar}
   ravine: null,            // last huayco start-point decision from the API
   terrain3d: false,
+  textureOn: true,
 };
 
 const subs = [];
@@ -61,11 +62,12 @@ export function focusBox() {
   feats.forEach((f) => walk(f.geometry.coordinates));
   if (w > e && state.scenario) {
     const f = state.focusArea;
+    if(f?.bounds)return [...f.bounds];
     const lon = f ? f.lon : state.scenario.summary.locator_lon;
     const lat = f ? f.lat : state.scenario.summary.locator_lat;
-    return [lon - 0.12, lat - 0.12, lon + 0.12, lat + 0.12]; // same box the server warms up
+    return [lon - 0.015, lat - 0.015, lon + 0.015, lat + 0.015];
   }
-  const pad = 0.02;
+  const pad = 0.002;
   return [w - pad, s - pad, e + pad, n + pad];
 }
 

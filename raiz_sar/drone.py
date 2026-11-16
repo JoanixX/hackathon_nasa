@@ -55,6 +55,14 @@ def plan_deposition(
 
     no_go = [to_metric(geometry_from_geojson(f["geometry"]), metric_crs).buffer(params.no_go_buffer_m)
              for f in features if f["properties"].get("exclusion_reason")]
+    # Mapped infrastructure (buildings, roads, paths) with the largest mature crown radius as clearance (NV-04).
+    from .exclusions import exclusion_metric
+    from .scenarios import SPECIES_MAX_CROWN_RADIUS_M
+
+    for f in features:
+        ex = exclusion_metric(f, metric_crs)
+        if ex is not None:
+            no_go.append(ex.buffer(SPECIES_MAX_CROWN_RADIUS_M))
     no_go_union = prep(unary_union(no_go)) if no_go else None
 
     spacing = params.node_spacing_m

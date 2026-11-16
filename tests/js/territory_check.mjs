@@ -2,11 +2,12 @@
 // No model inference, no Earthdata download. Default Chromium software renderer, unthrottled network.
 import {mkdir,writeFile} from "node:fs/promises";
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||"playwright");
-const BASE=process.argv[2]||"http://127.0.0.1:8765",OUT=".local/qa/territory";
+const HARDWARE=process.env.TERRITORY_RENDERER==='hardware';
+const BASE=process.argv[2]||"http://127.0.0.1:8765",OUT=HARDWARE?".local/qa/territory/hardware":".local/qa/territory";
 await mkdir(OUT,{recursive:true});
-const result={startedUtc:new Date().toISOString(),base:BASE,checks:[],errors:[],networkFailures:[],measurements:{},scope:"Software-rendered Chromium; real mapping/DEM checks and separately labelled GPU fixtures. No scientific or target-device certification."};
+const result={startedUtc:new Date().toISOString(),base:BASE,checks:[],errors:[],networkFailures:[],measurements:{},scope:`${HARDWARE?'D3D11 hardware':'SwiftShader software'} Chromium; real mapping/DEM checks and separately labelled GPU fixtures. No scientific or sustained-session certification.`};
 const check=(name,ok,detail)=>{result.checks.push({name,ok:!!ok,detail});console.log(ok?"PASS":"FAIL",name,detail??"");};
-const browser=await chromium.launch({args:["--enable-unsafe-swiftshader","--ignore-gpu-blocklist","--use-gl=angle","--use-angle=swiftshader"]});
+const browser=await chromium.launch({args:HARDWARE?["--ignore-gpu-blocklist","--use-gl=angle","--use-angle=d3d11"]:["--enable-unsafe-swiftshader","--ignore-gpu-blocklist","--use-gl=angle","--use-angle=swiftshader"]});
 const page=await browser.newPage({viewport:{width:1100,height:720}}),requests=[];
 // A separately edited eager overview appeared during this task. Preserve it in the application;
 // an optional isolated run tests the territorial viewer without launching those unrelated analysis jobs.
@@ -43,8 +44,18 @@ try{
   check("no eager DEM or territory module",!requests.some(u=>/\/api\/terrain\/|\/app\/territory/.test(u)),requests.filter(u=>/\/api\/terrain\/|\/app\/territory/.test(u)));
   result.measurements.initial=await page.evaluate(()=>({marks:window.raiz.perf,hardwareConcurrency:navigator.hardwareConcurrency,devicePixelRatio,ua:navigator.userAgent}));
   await page.evaluate(async()=>{const m=(await import('/app/map.js')).getMap();m.jumpTo({center:[-79.62,-5.38],zoom:11.4,bearing:-30});});
-  await page.click('#btn-3d');await page.waitForFunction(()=>window.raiz?.territory,null,{timeout:45000});
+  await page.click('#btn-3d');await page.waitForFunction(()=>window.raiz?.territory,null,{timeout:45000}).catch(async error=>{
+    result.activation=await page.evaluate(()=>({toast:document.querySelector('#toast')?.textContent,state3d:window.raiz?.state.terrain3d}));throw error;
+  });
   const ready=await stableTerrain();result.measurements.realTerrain=ready;check("stable real mountain terrain",ready.ok,ready);
+  result.measurements.regionalCadence=await page.evaluate(async()=>{
+    const m=(await import('/app/map.js')).getMap(),g=m.getCanvas().getContext('webgl2'),ext=g.getExtension('WEBGL_debug_renderer_info');
+    const times=[];let last=null,renders=0;const count=()=>renders++;m.on('render',count);
+    const bearing=m.getBearing();m.easeTo({bearing:bearing+12,duration:2000});
+    await new Promise(resolve=>{const start=performance.now();const step=t=>{if(last!==null)times.push(t-last);last=t;if(performance.now()-start>=3000)return resolve();m.triggerRepaint();requestAnimationFrame(step);};requestAnimationFrame(step);});
+    m.off('render',count);m.jumpTo({bearing});times.sort((a,b)=>a-b);
+    return{samples:times.length,renderCallbacks:renders,medianFrameMs:times[Math.floor(times.length/2)],p95FrameMs:times[Math.floor(times.length*.95)],renderer:ext?g.getParameter(ext.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER),pixelRatio:m.getCanvas().width/m.getContainer().clientWidth,heapUsedBytes:performance.memory?.usedJSHeapSize??null,scope:'Three-second regional camera turn; rAF cadence, not GPU completion timing or sustained-session certification.'};
+  });
   check("default true vertical scale and preserved regional zoom",await page.evaluate(async()=>{const m=(await import('/app/map.js')).getMap();return m.getTerrain().exaggeration===1&&Math.abs(m.getZoom()-11.4)<.15;}));
   await mapCapture(OUT+'/mountains.png');
   const point=await page.request.get(BASE+'/api/terrain/point?lon=-79.62&lat=-5.38');
@@ -52,10 +63,14 @@ try{
   const before=await page.evaluate(()=>window.raiz.territory.options.trees);
   await page.locator('[data-territory=trees]').uncheck();check("layer toggle",before&&!await page.evaluate(()=>window.raiz.territory.options.trees));
   await page.locator('[data-territory=trees]').check();
-  await page.selectOption('#territory-weather','heavy');await page.locator('[data-territory=animate]').check();
+  await page.selectOption('#territory-weather','heavy');
+  const effectsAvailable=await page.locator('[data-territory=animate]').isEnabled();
+  if(effectsAvailable)await page.locator('[data-territory=animate]').check();
   await page.waitForTimeout(500);
   check("weather shader renders",await page.evaluate(()=>window.raiz.territory.stats.drawCalls>=1));
-  await page.locator('[data-territory=animate]').uncheck();await page.selectOption('#territory-weather','clear');
+  if(effectsAvailable)await page.locator('[data-territory=animate]').uncheck();
+  else check('software graphics keeps continuous effects off',!await page.locator('[data-territory=animate]').isChecked());
+  await page.selectOption('#territory-weather','clear');
   await page.locator('[data-territory=inspect]').check();await page.mouse.click(650,430);
   await page.waitForFunction(()=>document.querySelector('#territory-inspect').textContent.includes('DSM elevation:')||document.querySelector('#territory-inspect').textContent.includes('Source elevation unknown'),null,{timeout:12000});
   check("coordinate inspection completes",await page.locator('#territory-inspect').innerText());

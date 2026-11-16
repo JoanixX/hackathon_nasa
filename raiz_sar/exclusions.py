@@ -13,6 +13,10 @@ unmapped ground is never reported as cleared.
 from __future__ import annotations
 
 import os
+import copy
+import time
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 # Declared clearance from the mapped centre line, metres (not measured widths; see module docstring).
@@ -29,6 +33,17 @@ def zone_infrastructure(geom_lonlat) -> dict[str, Any] | None:
     """Exclusion polygon (lon/lat GeoJSON) and counts for a zone; None when the source is disabled (tests)."""
     if not source_enabled():
         return None
+    result = _cached_infrastructure(geom_lonlat.wkb, int(time.time() // 900))
+    if result.get("status") != "ok":
+        _cached_infrastructure.cache_clear()  # an unavailable provider must be retryable immediately
+    return copy.deepcopy(result)
+
+
+@lru_cache(maxsize=64)
+def _cached_infrastructure(wkb: bytes, freshness_bucket: int) -> dict[str, Any]:
+    """Bounded 15-minute aggregate cache in addition to the source tile caches."""
+    from shapely import from_wkb
+    geom_lonlat = from_wkb(wkb)
     from shapely.geometry import mapping
     from shapely.ops import unary_union
 
@@ -39,10 +54,12 @@ def zone_infrastructure(geom_lonlat) -> dict[str, Any] | None:
     crs = utm_epsg_for(c.x, c.y)
     bbox = geom_lonlat.buffer(0.002).bounds
     try:
-        f = osm_features.features(bbox, {"transportation", "park"})
         from . import overture
-
-        f["building"] = overture.buildings(bbox)  # OSM + Google Open Buildings + Microsoft ML footprints
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            osm = pool.submit(osm_features.features, bbox, {"transportation", "park"})
+            buildings = pool.submit(overture.buildings, bbox)
+            f = osm.result()
+            f["building"] = buildings.result()
     except Exception as exc:  # noqa: BLE001
         return {"status": "unavailable", "reason": f"Infrastructure mapping could not be read: {type(exc).__name__}",
                 "geometry": None, "counts": {}, "field_review": True}

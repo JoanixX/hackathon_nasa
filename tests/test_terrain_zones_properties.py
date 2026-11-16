@@ -60,9 +60,9 @@ def test_slope_of_plane_matches_analytic(gx, gy, res):
 
 
 @st.composite
-def star_polygons(draw, lon=-80.62, lat=-5.2):
+def star_polygons(draw, lon=-80.62, lat=-5.2, min_n=3, max_n=12):
     """Simple (star-shaped, sorted by angle) polygons: never self-intersecting."""
-    n = draw(st.integers(3, 12))
+    n = draw(st.integers(min_n, max_n))
     angles = sorted(draw(st.lists(st.floats(0, 2 * math.pi - 1e-3), min_size=n, max_size=n, unique=True)))
     assume(all(b - a > 0.05 for a, b in zip(angles, angles[1:])) and (2 * math.pi - angles[-1] + angles[0]) > 0.05)
     radii = draw(st.lists(st.floats(0.004, 0.02), min_size=n, max_size=n))
@@ -118,7 +118,7 @@ def fake_terrain(geom):
 
 
 @settings(max_examples=budget(400))
-@given(st.lists(star_polygons(), min_size=1, max_size=3), st.lists(st.sampled_from(["candidate", "no_go"]), min_size=3, max_size=3))
+@given(st.lists(star_polygons(min_n=4, max_n=8), min_size=1, max_size=3), st.lists(st.sampled_from(["candidate", "no_go"]), min_size=3, max_size=3))
 def test_zone_dataset_invariants(polys, roles):
     from raiz_sar.geo import geodesic_area_ha
     from raiz_sar.zones import MIN_AREA_HA
@@ -141,6 +141,28 @@ def test_zone_dataset_invariants(polys, roles):
         assert shape(p["original_geometry"]).equals(shape(z.get("original_geometry") or z["geometry"]))
 
 
+@settings(max_examples=budget(300))
+@given(st.one_of(star_polygons(min_n=3, max_n=3), star_polygons(min_n=9, max_n=12)))
+def test_drawn_zone_vertex_count_outside_4_to_8_rejected(geom):
+    from raiz_sar.geo import geodesic_area_ha
+    from raiz_sar.zones import MIN_AREA_HA
+
+    assume(geodesic_area_ha(Polygon(geom["coordinates"][0])) >= MIN_AREA_HA)
+    with pytest.raises(ZoneError, match="a zone needs 4 to 8"):
+        build_zone_dataset(PIURA, [{"geometry": geom}], terrain_fn=fake_terrain)
+
+
+@settings(max_examples=budget(300))
+@given(star_polygons(min_n=9, max_n=12))
+def test_imported_zones_keep_their_vertices(geom):
+    from raiz_sar.geo import geodesic_area_ha
+    from raiz_sar.zones import MIN_AREA_HA
+
+    assume(geodesic_area_ha(Polygon(geom["coordinates"][0])) >= MIN_AREA_HA)
+    out = build_zone_dataset(PIURA, [{"geometry": geom, "imported": True}], terrain_fn=fake_terrain)
+    assert shape(out["sectors"]["features"][0]["geometry"]).equals(shape(geom))
+
+
 def test_overlapping_zones_rejected():
     a = {"type": "Polygon", "coordinates": [[[-80.63, -5.21], [-80.6, -5.21], [-80.6, -5.18], [-80.63, -5.18], [-80.63, -5.21]]]}
     b = {"type": "Polygon", "coordinates": [[[-80.61, -5.2], [-80.58, -5.2], [-80.58, -5.17], [-80.61, -5.17], [-80.61, -5.2]]]}
@@ -160,7 +182,7 @@ def test_dem_failure_keeps_slope_unknown():
     def broken(_g):
         raise TerrainUnavailable("no coverage")
 
-    g = {"type": "Polygon", "coordinates": [[[-80.63, -5.21], [-80.6, -5.21], [-80.6, -5.18], [-80.63, -5.21]]]}
+    g = {"type": "Polygon", "coordinates": [[[-80.63, -5.21], [-80.6, -5.21], [-80.6, -5.18], [-80.62, -5.185], [-80.63, -5.21]]]}
     out = build_zone_dataset(PIURA, [{"geometry": g}], terrain_fn=broken)
     q = out["sectors"]["features"][0]["properties"]["slope_percent"]
     assert q["value"] is None and q["evidence_class"] == "unknown"
@@ -227,12 +249,17 @@ def test_proxy_makes_only_black_nodata_transparent(r, g, b, black_rows, channels
         status_code = 200
 
     R.content = content
-    S_get = S.httpx.get
+    import shutil
+
+    shutil.rmtree(S._cache("gibs_tiles") / "nisar_gcov", ignore_errors=True)  # each example fetches afresh
+    shutil.rmtree(S._cache("gibs_raw") / "nisar_gcov", ignore_errors=True)  # raw tiles are cached too (shared with mosaics)
+    client = S.http()
+    S_get = client.get
     try:
-        S.httpx.get = lambda *args, **kw: R()
+        client.get = lambda *args, **kw: R()
         out = S.gibs_tile_transparent("nisar_gcov", "2026-10-31", 10, 280 + channels_extra, 526 + black_rows % 7)
     finally:
-        S.httpx.get = S_get
+        client.get = S_get
     with MemoryFile(out) as m, m.open() as d:
         o = d.read()
     assert np.all(o[3, :black_rows, :] == 0)  # no-data is transparent
@@ -267,3 +294,21 @@ def test_suggestion_is_a_valid_unapplied_proposal(geom):
     assert sug.is_valid and not sug.is_empty
     assert 0.0 <= r["metrics"]["iou"] <= 1.0
     assert r["boundary_uncertainty_m"] == 30.0
+
+
+@settings(max_examples=budget(800))
+@given(st.integers(4, 60), st.data(), st.integers(4, 8))
+def test_suggestions_are_limited_to_drawable_vertex_counts(n, data, max_v):
+    """Suggested boundaries must be drawable: 4 to max_v vertices, valid, and they keep most of the area."""
+    from raiz_sar.zones import limit_vertices
+
+    # Star polygon with evenly spaced, jittered angles (no filtering) at metric scale (metres).
+    jit = data.draw(st.lists(st.floats(-0.3, 0.3), min_size=n, max_size=n))
+    rad = data.draw(st.lists(st.floats(200, 1500), min_size=n, max_size=n))
+    pts = [(r * math.cos((i + j) * 2 * math.pi / n), r * math.sin((i + j) * 2 * math.pi / n)) for i, (j, r) in enumerate(zip(jit, rad))]
+    poly = Polygon(pts)
+    assume(poly.is_valid)
+    out = limit_vertices(poly, max_v)
+    n = len(out.exterior.coords) - 1
+    assert out.is_valid and 4 <= n <= max_v
+    assert out.area > 0.3 * poly.area

@@ -1,5 +1,7 @@
 # RAÍZ-SAR AI technology stack
 
+Territorial extension: [ADR 0005](decisions/0005-piura-territorial-view.md) retains MapLibre 5.24.1 and the existing Python GIS stack. Its lazy native WebGL2 additions share the map context; no new dependency, second scene engine or frontend rebuild is introduced. Source/scale/verification limits are in [the Piura report](PIURA_DIGITAL_TWIN.md).
+
 **Decision date:** November 14, 2026. **Status:** selected implementation baseline, not an installed or validated application. This resolves the owner's request for a defined stack. Change the baseline through an evidence-backed ADR rather than repeatedly reopening every tool choice.
 
 ## Selected architecture
@@ -122,3 +124,8 @@ No component was replaced, so ADR 0001 stands; its follow-up section records the
 Run target-environment lock regeneration and imports; a tiny synthetic HDF5 → masked array → georeferenced raster → polygon intersection test; a real local NISAR product inspection; worker restart/idempotency checks; one actual structured Gemini response; and one image-target AR session on declared hardware. Then run contract-based Hypothesis/fast-check campaigns and bounded malformed-GeoJSON/AI/scene fuzzing. Use independent references for science and do not count software tests as ecological validation.
 
 See [ADR 0001](decisions/0001-technology-stack.md) for alternatives, trade-offs and review triggers.
+
+[ADR 0003](decisions/0003-ponding-sites-piura-tumbes-and-twin-views.md) adds no library: the digital-twin views (trees, ponding, huayco front) use MapLibre `fill-extrusion` layers on the DEM terrain and record WebM with the browser's `MediaRecorder`; AR draws the same data with A-Frame's bundled three.js and drapes a map snapshot on the DEM mesh. New free source: OPERA L3 DSWx-HLS (surface water and ponding) via GIBS. Timing is logged with standard-library context variables to JSON lines; `tools/perf_report.py` summarizes them.
+## Demand-loading amendment — November 15, 2026
+
+[ADR 0004](decisions/0004-demand-driven-map-loading.md) retains pinned libraries and the native-module entry point. The coloured Liberty basemap is the default; analytical rasters and Copernicus DEM are requested explicitly. terra-draw and Chart.js move off the initial CDN critical path. Session-scoped telemetry distinguishes durations from time since page navigation. Regional XYZ/PMTiles delivery and richer shared 3D assets are proposed experiments, not new installed dependencies.

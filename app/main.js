@@ -8,6 +8,7 @@ import { $, el, badge, toast, announce } from "./dom.js";
 import { state, update, subscribe, invalidate } from "./state.js";
 import { mark, marks } from "./perf.js";
 import { loadScript } from "./loading.js";
+import {mountPanel,showDialog,compactKey,closeDialog} from "./workflow.js";
 
 const C = window.RaizCore;
 const RENDER = { explore: P.explore, zones: P.zones, evidence: P.evidence, compare: P.compare, plan: P.plan, future: P.future, report: P.report };
@@ -43,6 +44,7 @@ async function ensureDraw() {
 
 // ------------------------------------------------------------------ navigation
 function go(step) {
+  closeDialog();
   const avail = C.stepAvailability(state);
   if (!avail[step].open) { toast(avail[step].reason); return; }
   if (state.step === "zones" && step !== "zones") D.setMode("select");
@@ -75,7 +77,7 @@ function renderPanel() {
   let content;
   try { content = RENDER[state.step](); }
   catch (e) { content = [el("p", { class: "errline" }, `This step could not be shown: ${e.message}`)]; console.error(e); }
-  $("panel-body").replaceChildren(...(state.terrain3d && territory ? [territory.controls] : []), ...content);
+  mountPanel($("panel-body"),content,state.step);
   renderSteps();
   renderLegend();
 }
@@ -90,7 +92,7 @@ function renderLegend() {
     hls: "linear-gradient(90deg,#8a7a5a,#5f8a3c,#d8d0bc)", imerg: "linear-gradient(90deg,#9ad1f5,#2a6fdb,#7b2cbf)",
   };
   for (const [key, date] of Object.entries(state.imagery)) {
-    if (!date) continue;
+    if (!date || !state.textureOn) continue;
     const info = M.LAYER_INFO[key];
     if (key === "dswx") {
       items.push(el("div", { class: "li" }, el("span", { class: "swatch", style: "background:#0000ff" }), el("div", {}, el("strong", {}, "Open water"), " ", badge(info.cls), el("div", { class: "src" }, `${date} · ${info.src}`))));
@@ -141,7 +143,9 @@ function renderLegend() {
   if (state.terrain3d || state.overlays.hillshade) items.push(el("div", { class: "li" }, el("span", { class: "swatch", style: "background:linear-gradient(90deg,#d9b98a,#b8875a,#8c5a32,#4a2e17)" }),
     el("div", {}, state.terrain3d ? "3D surface: DEM relief with mapped cover " : "Relief shaded from elevation ", badge("derived"), el("div", { class: "src" },
       "Copernicus DEM GLO-30 (surface model)" + (state.terrain3d ? (M.getExaggeration() === 1 ? ", true relief" : `, relief exaggerated ×${M.getExaggeration()}`) : "")))));
-  $("legend").replaceChildren(el("h2", {}, "On the map"), ...items);
+  const chips=[["Buildings", "#d6cbbb"],["Vegetation",P.park],["Water",P.water]];
+  if(state.dataset||state.drawn.length)chips.push(["Selected zone","#e2a33b"]);
+  compactKey($("legend"),items,chips);
 }
 
 function renderStatus() {
@@ -180,14 +184,15 @@ function drawFuture() {
 function toggle3d(force) {
   const on = force === undefined ? !state.terrain3d : force;
   const ready = on ? ensureTerritory() : null;
-  update({ terrain3d: M.setTerrain(on) });
+  update({ terrain3d: on });
   $("btn-3d").setAttribute("aria-pressed", String(on));
   $("relief").hidden = !on;
-  if (on) ready.then(t => {
+  $("btn-territory").hidden = !on;
+  if (on) return ready.then(t => {
     if (!state.terrain3d) return;
-    t.setActive(true); $("panel-body").prepend(t.controls); renderLegend();
+    t.prepare(); M.setTerrain(true); t.setActive(true); renderLegend();
   }).catch(error => { toast(error.message); toggle3d(false); });
-  else { territory?.setActive(false); territory?.controls.remove(); M.setHillshade(state.overlays.hillshade); }
+  else { territory?.setActive(false); territory?.controls.remove(); M.setTerrain(false); M.setHillshade(state.overlays.hillshade); }
   renderLegend();
 }
 
@@ -213,6 +218,7 @@ async function goToArea(fa) {
   mark("area.go", fa.name);
   P.resetLoads();
   const map = M.getMap();
+  if(fa.bounds)M.setWorkWindow(fa.bounds);
   map.jumpTo({ center: [fa.lon, fa.lat], zoom: fa.zoom });
   update({ focusArea: fa, rain: null, acquisitions: null, dates: {}, coverage: {},
     compare: { before: null, after: null, blend: 1, which: "after" } });
@@ -232,8 +238,8 @@ async function selectScenario(id) {
   M.setData("zones", null); M.setData("nodes", null); M.setData("future", null); M.setData("suggestion", null);
   const s = state.scenario.summary;
   $("brand-place").textContent = s.primary ? "Piura" : "Carabayllo, Lima";
-  const [w, so, e, n] = s.region_bbox;
-  M.setData("region", { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[w, so], [e, so], [e, n], [w, n], [w, so]] } }] });
+  const boxes=(s.focus_areas||[]).filter(f=>f.bounds).map(f=>f.bounds);
+  M.setData("region", { type: "FeatureCollection", features: (boxes.length?boxes:[s.region_bbox]).map(([w,so,e,n])=>({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[w, so], [e, so], [e, n], [w, n], [w, so]] } })) });
   M.setRegionMask(null);
   if (s.region_boundary) {
     // Exact department boundary: outline it and dim everything outside (zones outside are refused by the API).
@@ -242,6 +248,7 @@ async function selectScenario(id) {
   }
   const fa = (s.focus_areas || [])[0];
   update({ focusArea: fa || null });
+  if(fa?.bounds)M.setWorkWindow(fa.bounds);
   if (fa) M.getMap().jumpTo({ center: [fa.lon, fa.lat], zoom: fa.zoom }); else M.flyTo([s.locator_lon, s.locator_lat], 11);
   renderPanel();
   mark("data.scenario_ready");
@@ -251,7 +258,7 @@ async function selectScenario(id) {
 const TOUR = [
   ["Piura on real data", "Start with streets, buildings and land cover. Load radar, surface water or rainfall only when needed. The legend identifies each visible layer, its source and observation date."],
   ["Draw the zones", "In Zones, click on the map to draw the area you want to assess. You can move or delete vertices, and ask for a boundary proposal from terrain and imagery. Nothing changes until you accept it."],
-  ["Evidence and the rains", "Evidence measures slope from the DEM and lists the radar observations. After rain compares Sentinel-1 radar before and after the wettest days of 2026, because NISAR started over Piura in June."],
+  ["Evidence and the rains", "Evidence derives slope from the DEM and lists dated radar acquisitions. After rain compares available radar and rainfall context. Check actual source coverage for the selected local window."],
   ["Plan and future", "Plan turns a budget into seeds, germinated seedlings and established plants, kept separate. Future asks the AI for a scenario at 3, 6 and 12 months, shown on the 3D terrain and in camera AR."],
   ["Nothing is invented", "Unknown values stay unknown, demo data is labeled, and generated scenarios are never presented as observations."],
 ];
@@ -278,6 +285,13 @@ async function boot() {
     $("panel-toggle").setAttribute("aria-expanded", String(!c));
   });
   $("btn-3d").addEventListener("click", () => toggle3d());
+  $("btn-territory").addEventListener("click",async()=>{const t=await ensureTerritory();t.controls.open=true;showDialog("3D view settings",t.controls);});
+  $("btn-texture").addEventListener("click",()=>{
+    state.textureOn=!state.textureOn;M.setImageVisibility(state.textureOn);
+    $("btn-texture").setAttribute("aria-pressed",String(state.textureOn));
+    $("btn-texture").textContent=state.textureOn?"Images on":"Images off";
+    renderLegend();
+  });
   document.querySelectorAll("#relief [data-ex]").forEach((b) => b.addEventListener("click", () => {
     M.setExaggeration(Number(b.dataset.ex));
     document.querySelectorAll("#relief [data-ex]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
@@ -302,7 +316,7 @@ async function boot() {
   M.on("zoneClick", (p) => p && toast(`${p.label}: ${p.role === "no_go" ? "no-go zone" : "candidate zone"}`));
   const first = (primary.focus_areas || [])[0];
   // Open directly on the study area (no fly-in from a continental zoom, which fetched every zoom level).
-  await M.initMap("map", { center: first ? [first.lon, first.lat] : [primary.locator_lon, primary.locator_lat], zoom: first ? first.zoom : 9, region: primary.region_bbox });
+  await M.initMap("map", { center: first ? [first.lon, first.lat] : [primary.locator_lon, primary.locator_lat], zoom: first ? first.zoom : 9, region: first?.bounds||primary.region_bbox,coverage:primary.region_bbox });
   mark("map.load");
   M.getMap().once("idle", () => mark("map.first_idle"));
   await selectScenario(primary.scenario_id);

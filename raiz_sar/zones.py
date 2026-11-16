@@ -23,6 +23,8 @@ from .geo import geodesic_area_ha, geometry_to_geojson, to_metric, to_wgs84, utm
 from .scenarios import get_scenario
 
 MAX_ZONES = 20
+MIN_ZONE_VERTICES = 4  # owner rule (2026-11-15): each drawn zone has 4 to 8 vertices
+MAX_ZONE_VERTICES = 8
 MAX_VERTICES = 2000
 MIN_AREA_HA = 0.05
 MAX_AREA_HA = 50_000
@@ -63,7 +65,7 @@ def validate_polygon(obj: Any) -> Polygon | MultiPolygon:
     return geom
 
 
-def build_zone_dataset(scenario_id: str, zones: list[dict[str, Any]], terrain_fn=None) -> dict[str, Any]:
+def build_zone_dataset(scenario_id: str, zones: list[dict[str, Any]], terrain_fn=None, infra_fn=None) -> dict[str, Any]:
     """Validate zones, attach DEM terrain statistics and return an imported-dataset record."""
     try:
         summary = get_scenario(scenario_id)["summary"]
@@ -77,10 +79,22 @@ def build_zone_dataset(scenario_id: str, zones: list[dict[str, Any]], terrain_fn
     from .terrain import TerrainUnavailable, zone_terrain_stats
 
     terrain_fn = terrain_fn or zone_terrain_stats
+    if infra_fn is None:
+        from .exclusions import zone_infrastructure as infra_fn
     features, seen = [], set()
     for i, z in enumerate(zones):
         geom = validate_polygon(z.get("geometry"))
-        if region:
+        if not z.get("imported"):
+            n_vertices = len(geom.exterior.coords) - 1 if isinstance(geom, Polygon) else -1
+            if not (MIN_ZONE_VERTICES <= n_vertices <= MAX_ZONE_VERTICES):
+                raise ZoneError(f"Zone {i + 1} has {n_vertices} vertices; a zone needs {MIN_ZONE_VERTICES} to {MAX_ZONE_VERTICES}.")
+        if summary.get("region_boundary"):
+            from .region import boundary
+
+            _g, prepared, _meta = boundary(summary["region_boundary"])
+            if not prepared.covers(geom):
+                raise ZoneError(f"Zone {i + 1} lies outside the {summary['name']} department boundary.")
+        elif region:
             w, s, e, n = region
             minx, miny, maxx, maxy = geom.bounds
             if minx < w or maxx > e or miny < s or maxy > n:
@@ -120,6 +134,12 @@ def build_zone_dataset(scenario_id: str, zones: list[dict[str, Any]], terrain_fn
         feat = {"type": "Feature", "id": sid, "geometry": geometry_to_geojson(geom), "properties": props.model_dump(mode="json")}
         feat["properties"]["terrain"] = stats
         feat["properties"]["role"] = role
+        # Mapped buildings/roads/paths inside the zone: excluded from planting everywhere downstream (NV-04).
+        infra = infra_fn(geom)
+        if infra is not None:
+            feat["properties"]["infrastructure"] = infra
+            if infra.get("status") != "ok":
+                feat["properties"]["warnings"].append("Infrastructure mapping unavailable: planting locations need field review.")
         # Both the original drawing and the confirmed geometry are always recorded.
         feat["properties"]["original_geometry"] = z.get("original_geometry") or geometry_to_geojson(geom)
         if refinement:
@@ -174,7 +194,10 @@ def suggest_boundary(geometry: dict[str, Any], optical_date: str | None = None, 
     if inside.sum() < 4:
         raise ZoneError("Zone too small for a 30 m segmentation suggestion.")
     n_segments = max(12, int(h * w / 36))
-    labels = slic(stack, n_segments=n_segments, compactness=0.12, start_label=1, channel_axis=-1, enforce_connectivity=True)
+    from . import perf
+
+    with perf.span("slic.segment", pixels=h * w):
+        labels = slic(stack, n_segments=n_segments, compactness=0.12, start_label=1, channel_axis=-1, enforce_connectivity=True)
     keep = np.zeros_like(inside)
     for lab in np.unique(labels):
         m = labels == lab
@@ -187,6 +210,7 @@ def suggest_boundary(geometry: dict[str, Any], optical_date: str | None = None, 
     if isinstance(merged, MultiPolygon):
         merged = max(merged.geoms, key=lambda p: p.area)  # one zone in, one zone out
     merged = Polygon(merged.exterior)  # drop pinholes from the pixel mask
+    merged = limit_vertices(merged, MAX_ZONE_VERTICES)
     suggestion = to_wgs84(merged, crs)
     if not suggestion.is_valid:
         suggestion = suggestion.buffer(0)
@@ -212,6 +236,23 @@ def suggest_boundary(geometry: dict[str, Any], optical_date: str | None = None, 
                  "Accept it, edit it, or keep your own polygon."),
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def limit_vertices(poly: Polygon, max_vertices: int) -> Polygon:
+    """Simplify a polygon until it has at most ``max_vertices`` (and at least 4) vertices, staying valid."""
+    if len(poly.exterior.coords) - 1 <= max_vertices:
+        return poly
+    tol = max(1.0, math.sqrt(poly.area) * 0.005)
+    for _ in range(40):
+        cand = poly.simplify(tol, preserve_topology=True)
+        n = len(cand.exterior.coords) - 1 if isinstance(cand, Polygon) else 10**9
+        if isinstance(cand, Polygon) and cand.is_valid and MIN_ZONE_VERTICES <= n <= max_vertices:
+            return cand
+        if isinstance(cand, Polygon) and n < MIN_ZONE_VERTICES:
+            break
+        tol *= 1.4
+    # Fallback: the proposal's minimum rotated rectangle (4 vertices).
+    return poly.minimum_rotated_rectangle
 
 
 def _hls_rgb(date: str, user, shape_hw, tf, crs):

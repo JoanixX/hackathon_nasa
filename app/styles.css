@@ -175,7 +175,7 @@ td.num, th.num { text-align: right; }
   .topbar { flex-wrap: wrap; height: var(--top-h); padding: 8px 12px; gap: 6px; }
   .steps { flex-basis: 100%; order: 3; }
   .steps button .label { display: none; }
-  .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 46vh; border-radius: 14px 14px 0 0; }
+  .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 46dvh; max-height: 46dvh; border-radius: 14px 14px 0 0; }
   .panel.collapsed { transform: translateY(calc(100% - 52px)); }
   .legend { display: none; }
   .map-tools { top: calc(var(--top-h) + 8px); }
@@ -198,6 +198,30 @@ table.metrics th, table.metrics td { border-bottom: 1px solid var(--line); paddi
 /* Shared growth + event timeline controls */
 .timeline { margin: 8px 0; }
 .timeline input[type=range] { width: 100%; }
+
+/* One bounded page per step; extensive material is opened deliberately. */
+.panel-body { position: relative; overflow: hidden; min-height: 0; display: flex; flex-direction: column; mask-image: none; -webkit-mask-image: none; }
+.panel-head { flex-shrink: 0; }
+.panel-viewport { flex: 1; min-height: 0; overflow: hidden; }
+.panel-pages { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+.panel-pages:empty { min-height: 0; }
+.panel-measure { position: absolute; inset: 0 18px auto; visibility: hidden; pointer-events: none; }
+.detail-launch { width: 100%; min-height: 44px; margin: 6px 0; justify-content: space-between; }
+.detail-launch::after { content: "↗"; }
+.detail-dialog { width: min(760px,94vw); max-height: 88dvh; border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--basalt); color: var(--sand); box-shadow: var(--shadow); }
+.detail-dialog::backdrop { background: rgba(8,15,18,.55); }
+.detail-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.detail-head h2 { font-size: 1.05rem; }
+.detail-body { padding: 14px 18px; overflow: auto; max-height: calc(88dvh - 82px); }
+.detail-body table { display: block; max-width: 100%; overflow-x: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 5px; width: auto; max-width: min(620px,calc(100vw - 440px)); max-height: none; overflow: visible; background: transparent; border: 0; box-shadow: none; padding: 0; }
+.key-chip { display: inline-flex; gap: 6px; align-items: center; padding: 6px 10px; border-radius: 20px; background: rgba(245,241,229,.94); color: #27333a; font: 12px "Archivo",sans-serif; }
+.key-chip i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+.key-more { cursor: pointer; border: 1px solid #697570; min-height: 32px; }
+.source-key .li { display: flex; gap: 8px; margin: 10px 0; }
+.source-key .src { color: var(--sand-dim); font-size: .8rem; }
+.tool[hidden] { display: none; }
+@media (max-width:900px) { .legend { display: flex; bottom: calc(46vh + 10px); right: 10px; max-width: 92vw; } .legend > .key-chip:not(button) { display: none; } .map-tools { max-width: calc(100vw - 20px); flex-wrap: wrap; justify-content: flex-end; } }
 
 /* Territorial controls reuse the workflow panel; the map keeps its full viewport. */
 .territory-controls { border-bottom: 1px solid var(--line); padding-bottom: 12px; }

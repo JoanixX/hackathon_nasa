@@ -5,15 +5,22 @@ export const MERCATOR_CIRCUMFERENCE = 2 * Math.PI * 6371008.8;
 export function renderPolicy({software=false,reduced=false,visible=true,animate=false,ratio=1,quality=null}={}) {
   const native=Number.isFinite(ratio)&&ratio>=.25&&ratio<=4?ratio:1;
   const scale=[.5,.75,1].includes(quality)?quality:software?.5:1;
-  return {pixelRatio:native*scale,fps:animate&&visible&&!reduced?(software?1:24):0};
+  return {pixelRatio:native*scale,fps:animate&&visible&&!reduced&&!software?24:0};
 }
 export const PIURA_VIEWS = Object.freeze({
-  region: { label: "All Piura", bounds: [-81.3284, -6.37209, -79.21004, -4.07949] },
-  mountains: { label: "Andean ridges", center: [-79.62, -5.38], zoom: 11.4, bearing: -30 },
-  valley: { label: "Chulucanas valley", center: [-80.16, -5.10], zoom: 12, bearing: -15 },
-  huancabamba: { label: "Huancabamba", center: [-79.45, -5.24], zoom: 12.7, bearing: -25 },
-  coast: { label: "Sechura coast", center: [-80.82, -5.56], zoom: 12, bearing: 0 },
+  aerial: { label: "Current site · aerial", pitch: 0, bearing: 0 },
+  slope: { label: "Current site · slope", pitch: 64, bearing: -25 },
 });
+/** Three detail bands with hysteresis: hovering near a threshold cannot repeatedly rebuild detail. */
+export function detailTier(zoom,previous=0) {
+  if(!Number.isFinite(zoom))return 0;
+  let tier=[0,1,2].includes(previous)?previous:0;
+  if(tier===2&&zoom<14.5)tier=1;
+  if(tier===1&&zoom<12.5)tier=0;
+  if(tier===0&&zoom>=13)tier=1;
+  if(tier===1&&zoom>=15)tier=2;
+  return tier;
+}
 export function validPosition(p) {
   return Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]) &&
     p[0] >= -180 && p[0] <= 180 && p[1] > -85 && p[1] < 85;

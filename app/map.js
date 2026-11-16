@@ -11,7 +11,7 @@ export const LAYER_INFO = {
   nisar: { title: "NISAR radar (GCOV)", gibs: "NISAR_L2_Geocoded_Polarimetric_Covariance", tms: "GoogleMapsCompatible_Level13", ext: "png", maxzoom: 13,
     cls: "observed", src: "NISAR L2 GCOV normalized backscatter, false-colour rendering via GIBS", explain: "L-band radar backscatter from NISAR. Bright means a rough or vegetated surface or structures; dark means smooth surfaces such as calm water or flat bare soil. It is not a moisture or depth measurement." },
   rtc: { title: "Sentinel-1 radar (OPERA RTC)", gibs: "OPERA_L2_Radiometric_Terrain_Corrected_SAR_Sentinel-1", tms: "GoogleMapsCompatible_Level12", ext: "png", maxzoom: 12,
-    cls: "observed", src: "OPERA RTC-S1 (C-band), rendering via GIBS", explain: "C-band radar from Sentinel-1, terrain corrected. Used here because NISAR has no January–April 2026 acquisitions over Piura." },
+    cls: "observed", src: "OPERA RTC-S1 (C-band), rendering via GIBS", explain: "Terrain-corrected C-band radar from Sentinel-1. Complementary context; check actual acquisition dates and coverage separately from NISAR." },
   dswx: { title: "Surface water and ponding (OPERA DSWx-HLS)", gibs: "OPERA_L3_Dynamic_Surface_Water_Extent-HLS", tms: "GoogleMapsCompatible_Level12", ext: "png", maxzoom: 12,
     cls: "derived", src: "OPERA L3 DSWx-HLS (NASA JPL) via GIBS; 30 m", explain: "Open water (dark blue) and partial surface water such as ponding (light blue) classified from Landsat/Sentinel-2. Faint grey marks cloud: unknown, not dry." },
   imerg: { title: "Rain rate (GPM IMERG)", gibs: "IMERG_Precipitation_Rate", tms: "GoogleMapsCompatible_Level6", ext: "png", maxzoom: 6,
@@ -27,22 +27,69 @@ function emit(evt, data) { (listeners[evt] || []).forEach((f) => f(data)); }
 export function getMap() { return map; }
 
 let regionBounds = null;
+let coverageBounds = null;
+let imagesVisible = true;
+
+export function setImageVisibility(on) {
+  imagesVisible=!!on;
+  for(const id of Object.keys(LAYER_INFO)) if(map?.getLayer(`img-${id}`))map.setLayoutProperty(`img-${id}`,"visibility",on?"visible":"none");
+}
+
+export function setWorkWindow(bounds) {
+  if(!bounds||!map)return;
+  regionBounds=bounds;
+  applyWorkConstraint();
+  // DEM source bounds are immutable; replace it when changing the working locality.
+  if(map.getSource("dem")) {
+    const wasTerrain=terrainOn;
+    map.setTerrain(null);
+    for(const id of ["hillshade","relief-tint"])if(map.getLayer(id))map.removeLayer(id);
+    map.removeSource("dem");ensureDEM();
+    if(wasTerrain)map.setTerrain({source:"dem",exaggeration});
+    setHillshade(wasTerrain);
+  }
+}
 
 export function initMap(container, view) {
   terrainOn = false; exaggeration = 1; materialPaint = []; activeImagery.clear();
   regionBounds = view.region || null;
+  coverageBounds = view.coverage || regionBounds;
   map = new maplibregl.Map({
     container, style: BASEMAP, center: view.center, zoom: view.zoom, pitch: 0, maxPitch: 75, fadeDuration: 0,
-    // Navigation bounds; edge tiles may overlap neighbouring territory. This is not an administrative mask.
-    maxBounds: regionBounds ? [[regionBounds[0], regionBounds[1]], [regionBounds[2], regionBounds[3]]] : undefined,
-    minZoom: 7,
+    // Constrain the camera centre, without forcing the viewport/terrain camera into a tiny rectangle.
+    minZoom: 13, maxZoom: 18,
     maxTileCacheSize: 128, maxTileCacheZoomLevels: 3,
     attributionControl: { compact: false, customAttribution: `${GIBS_ATTR} · ${DEM_ATTR}` },
   });
+  applyWorkConstraint();
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
   map.on("error", (e) => emit("error", e && e.error ? e.error.message || String(e.error) : "Map error"));
-  return new Promise((resolve) => map.on("load", () => { setupBase(); resolve(map); }));
+  map.on("sourcedata",e=>{if(e.sourceId==="dem")syncTerrainAnchor();});
+  map.on("moveend",syncTerrainAnchor);
+  // Controls need the parsed style, not every remote glyph/vector tile. Tile readiness is separate.
+  return new Promise((resolve) => map.on("style.load", () => { setupBase(); resolve(map); }));
+}
+
+export function terrainAnchorNeedsSync(current,sample) {
+  return Number.isFinite(sample)&&Number.isFinite(current)&&(sample!==0||current<=0)&&Math.abs(sample-current)>.25;
+}
+export function constrainView(center,zoom,bounds) {
+  if(!center.every(Number.isFinite)||!Number.isFinite(zoom))throw new RangeError("A finite camera is required.");
+  const [w,s,e,n]=bounds;
+  return {center:[Math.max(w,Math.min(e,center[0])),Math.max(s,Math.min(n,center[1]))],zoom:Math.max(13,Math.min(18,zoom))};
+}
+function applyWorkConstraint() {
+  if(!regionBounds)return;
+  map.setTransformConstrain((center,zoom)=>{
+    const v=constrainView([center.lng,center.lat],zoom??13,regionBounds);
+    return {center:new maplibregl.LngLat(...v.center),zoom:v.zoom};
+  });
+}
+function syncTerrainAnchor() {
+  if(!terrainOn||!map.isSourceLoaded?.("dem")||map.isMoving?.())return;
+  const sample=map.queryTerrainElevation(map.getCenter());
+  if(terrainAnchorNeedsSync(map.getCenterElevation(),sample))map.setCenterElevation(sample);
 }
 
 function firstSymbolId() {
@@ -120,7 +167,7 @@ function setupBase() {
   // Building footprints: Overture Maps (OSM + Google Open Buildings + Microsoft ML footprints) via the API.
   map.addSource("overture", { type: "vector", tiles: [`${location.origin}/api/buildings/{z}/{x}/{y}.pbf`], minzoom: 13, maxzoom: 14,
     attribution: "Buildings © OpenStreetMap contributors, Overture Maps Foundation (ODbL); Google Open Buildings (CC BY 4.0); Microsoft (ODbL)",
-    ...(regionBounds ? { bounds: regionBounds } : {}) });
+    ...(coverageBounds ? { bounds: coverageBounds } : {}) });
   map.addLayer({ id: "ov-buildings", type: "fill", source: "overture", "source-layer": "building", minzoom: 13,
     paint: { "fill-color": BUILDING_COLOR, "fill-outline-color": "#8a7356", "fill-opacity": 0.9 } }, firstSymbolId());
   const empty = { type: "FeatureCollection", features: [] };
@@ -203,7 +250,7 @@ export function setImagery(key, date, opacity = 1) {
   map.addSource(id, { type: "raster", tiles: gibsTiles(info, date, key), tileSize: 256, maxzoom: info.maxzoom,
     attribution: `${info.src} (${date})`, ...(regionBounds ? { bounds: regionBounds } : {}) });
   // Linear resampling only smooths pixel edges when zoomed past the native level; it adds no detail.
-  map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": opacity, "raster-resampling": "linear", "raster-fade-duration": 0 } },
+  map.addLayer({ id, type: "raster", source: id, layout:{visibility:imagesVisible?"visible":"none"}, paint: { "raster-opacity": opacity, "raster-resampling": "linear", "raster-fade-duration": 0 } },
     "region-line");
 }
 
@@ -294,13 +341,13 @@ export function setTerrain(on) {
   if (on) {
     ensureDEM();
     map.setTerrain({ source: "dem", exaggeration });
+    syncTerrainAnchor();
     setBuildings(true);
     setTerritoryMaterials(true);
     setAtmosphere(true);
     if (map.getLayer("relief-tint")) map.setLayoutProperty("relief-tint", "visibility", "visible"); // mountains read brown in 3D
     map.setPaintProperty("hillshade", "hillshade-exaggeration", 0.55);
     map.setLayoutProperty("hillshade", "visibility", "visible");
-    // Preserve regional framing: forcing z14 hid mountains and fetched unnecessary city tiles.
     map.easeTo({ pitch: 60, duration: reduceMotion() ? 0 : 1200 });
   } else {
     map.setTerrain(null);

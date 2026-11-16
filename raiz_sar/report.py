@@ -17,6 +17,7 @@ from .ai_provider import AIError, inline_schema, prompt_hash
 from .contracts import AIReportSections, FutureSceneSpecification, InferenceTrace, PlanningDraft, PlantingPlan, ReportStatement, content_hash
 from .geo import lonlat_to_metric
 from .safety import text_problems
+from .municipal import municipal_content
 
 STATUS_LABEL = "Draft — not an approved technical dossier"
 
@@ -56,7 +57,7 @@ def deterministic_tables(plan: PlantingPlan, dataset: dict[str, Any]) -> dict[st
     budget = [
         {"item": "Capsules", "value": _pen(sum(a.capsule_cost_cents for a in plan.budget.allocations))},
         {"item": "Delivery and maintenance (prorated by funded area)", "value": _pen(sum(a.area_cost_cents for a in plan.budget.allocations))},
-        {"item": "Fixed monitoring", "value": _pen(plan.budget.monitoring_fixed_cost_cents)},
+        {"item": "Applied monitoring", "value": _pen(plan.budget.total_cost_cents - sum(a.total_cost_cents for a in plan.budget.allocations))},
         {"item": "Total", "value": _pen(plan.budget.total_cost_cents)},
         {"item": "Budget", "value": _pen(plan.budget.budget_cents)},
         {"item": "Remaining", "value": _pen(plan.budget.remaining_cents)},
@@ -113,6 +114,9 @@ def build_report(plan: PlantingPlan, dataset: dict[str, Any], scene: FutureScene
             ReportStatement(text=plan.drone.note, authorship="human_entered"),
         ],
     }
+    municipal_sections, municipal_tables = municipal_content(plan, dataset)
+    sections.update(municipal_sections)
+    tables.update(municipal_tables)
     if not plan.budget.feasible:
         sections["quantities"].append(ReportStatement(text=f"Infeasible: {plan.budget.infeasibility_reason}", authorship="modeled", source_ids=sid))
     if scene:
@@ -127,7 +131,7 @@ def build_report(plan: PlantingPlan, dataset: dict[str, Any], scene: FutureScene
     prompt = "Write the narrative sections for this draft.\nCONTEXT:\n" + json.dumps(ctx, ensure_ascii=False, indent=1)
     try:
         if provider is None:
-            raise AIError("AI is not configured on the server.")
+            raise AIError("Optional AI narrative was not requested; the complete deterministic draft is available.")
         gen = provider.generate_json(SYSTEM_INSTRUCTION, prompt, schema, seed=int(plan.plan_version[:8], 16) % (2**31))
         try:
             ai = AIReportSections.model_validate(json.loads(gen.text))
@@ -154,7 +158,7 @@ def build_report(plan: PlantingPlan, dataset: dict[str, Any], scene: FutureScene
     return PlanningDraft(
         report_version=content_hash(json.loads(json.dumps(basis, default=lambda o: o.model_dump(mode="json")))),
         plan_version=plan.plan_version, scene_version=scene.scene_version if scene else None,
-        scenario_id=plan.scenario_id, title=f"RAÍZ-SAR AI planting planning draft — {dataset['summary']['name']}",
+        scenario_id=plan.scenario_id, title=f"Ayumi municipal planting planning draft — {dataset['summary']['name']}",
         status_label=STATUS_LABEL, sections=sections, tables=tables, ai_status=ai_status, inference=trace,
         ai_error=ai_error, created_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     )

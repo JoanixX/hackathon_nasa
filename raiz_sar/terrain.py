@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
+import rasterio.windows
+from affine import Affine
 from rasterio.enums import Resampling
 from rasterio.features import geometry_mask
 from rasterio.transform import from_bounds
@@ -24,6 +26,7 @@ from rasterio.windows import from_bounds as window_from_bounds
 from scipy.ndimage import map_coordinates
 from shapely.geometry import mapping
 
+from . import perf
 from .config import get_settings
 from .geo import to_metric, utm_epsg_for
 
@@ -99,8 +102,12 @@ def _tile_exists(lat_floor: int, lon_floor: int) -> bool:
         return False  # ocean or not-yet-public tile: no data, never invented
 
 
-def read_dem(west: float, south: float, east: float, north: float, res_deg: float = NATIVE_DEG) -> tuple[np.ndarray, object, bool]:
-    """Return (heights float32 with NaN nodata, transform in EPSG:4326, any_coverage)."""
+def read_dem(west: float, south: float, east: float, north: float, res_deg: float = NATIVE_DEG, cell_ok=None) -> tuple[np.ndarray, object, bool]:
+    """Return (heights float32 with NaN nodata, transform in EPSG:4326, any_coverage).
+
+    `cell_ok(lat, lon)` can skip 1° cells (map tiles skip cells outside every study region, which are
+    not in the local cache and would otherwise be read remotely: a z7 tile took 78 s that way).
+    """
     if not (-180 <= west < east <= 180 and -90 <= south < north <= 90):
         raise ValueError("invalid bounds")
     width = max(1, int(math.ceil((east - west) / res_deg)))
@@ -113,19 +120,47 @@ def read_dem(west: float, south: float, east: float, north: float, res_deg: floa
     with rasterio.Env(**GDAL_ENV):
         for lat in range(math.floor(south), math.ceil(north)):
             for lon in range(math.floor(west), math.ceil(east)):
+                if cell_ok is not None and not cell_ok(lat, lon):
+                    continue
                 if not _tile_exists(lat, lon):
                     continue
-                with rasterio.open(tile_url(lat, lon)) as ds:
-                    tmp = np.full((height, width), np.nan, dtype="float32")
-                    win = window_from_bounds(max(west, lon), max(south, lat), min(east, lon + 1), min(north, lat + 1), ds.transform)
-                    src = ds.read(1, window=win.round_offsets().round_lengths(), boundless=True, fill_value=np.nan).astype("float32")
-                    src_tf = ds.window_transform(win.round_offsets().round_lengths())
-                    reproject(src, tmp, src_transform=src_tf, src_crs="EPSG:4326", dst_transform=transform, dst_crs="EPSG:4326",
-                              resampling=Resampling.bilinear, src_nodata=np.nan, dst_nodata=np.nan)
-                    sel = np.isfinite(tmp)
-                    out[sel] = tmp[sel]
-                    covered = covered or bool(sel.any())
+                ds = _open_cell(lat, lon)
+                win = window_from_bounds(max(west, lon), max(south, lat), min(east, lon + 1), min(north, lat + 1), ds.transform)
+                win = win.round_offsets().round_lengths().intersection(rasterio.windows.Window(0, 0, ds.width, ds.height))
+                if win.width < 1 or win.height < 1:
+                    continue
+                # Read at (about) the requested resolution: GDAL serves decimated reads from the COG
+                # overviews instead of reading every native pixel (the main cost at low zooms).
+                step = max(1.0, res_deg / NATIVE_DEG)
+                ow, oh = max(1, int(math.ceil(win.width / step))), max(1, int(math.ceil(win.height / step)))
+                src = ds.read(1, window=win, out_shape=(oh, ow), resampling=Resampling.bilinear).astype("float32")
+                if ds.nodata is not None:
+                    src[src == ds.nodata] = np.nan
+                src_tf = ds.window_transform(win) * Affine.scale(win.width / ow, win.height / oh)
+                tmp = np.full((height, width), np.nan, dtype="float32")
+                reproject(src, tmp, src_transform=src_tf, src_crs="EPSG:4326", dst_transform=transform, dst_crs="EPSG:4326",
+                          resampling=Resampling.bilinear, src_nodata=np.nan, dst_nodata=np.nan)
+                sel = np.isfinite(tmp)
+                out[sel] = tmp[sel]
+                covered = covered or bool(sel.any())
     return out, transform, covered
+
+
+_cells = threading.local()
+
+
+def _open_cell(lat: int, lon: int):
+    """Keep DEM datasets open per thread (rasterio datasets are not shared across threads)."""
+    cache = getattr(_cells, "open", None)
+    if cache is None:
+        cache = _cells.open = {}
+    url = tile_url(lat, lon)
+    ds = cache.get((lat, lon))
+    if ds is None or ds.name != url and not url.startswith("/vsicurl") and ds.name.startswith("/vsicurl"):
+        if ds is not None:
+            ds.close()  # a local copy has replaced the remote one
+        ds = cache[(lat, lon)] = rasterio.open(url)
+    return ds
 
 
 # ---------------------------------------------------------------- web-mercator tiles
@@ -155,6 +190,54 @@ def decode_terrarium(rgb: np.ndarray) -> np.ndarray:
 
 
 _tile_slots = threading.BoundedSemaphore(4)  # bound concurrent remote COG reads
+
+
+@lru_cache(maxsize=1)
+def _regions() -> tuple[tuple[float, float, float, float], ...]:
+    from .scenarios import get_scenario, scenario_ids
+
+    return tuple(tuple(get_scenario(s)["summary"]["region_bbox"]) for s in scenario_ids() if get_scenario(s)["summary"].get("region_bbox"))
+
+
+@lru_cache(maxsize=1)
+def _region_shapes() -> tuple:
+    """(bbox, prepared exact boundary or None) per scenario region."""
+    from .region import boundary
+    from .scenarios import get_scenario, scenario_ids
+
+    out = []
+    for s in scenario_ids():
+        summ = get_scenario(s)["summary"]
+        if summ.get("region_bbox"):
+            out.append((tuple(summ["region_bbox"]), boundary(summ["region_boundary"])[1] if summ.get("region_boundary") else None))
+    return tuple(out)
+
+
+def _in_regions(b: tuple[float, float, float, float]) -> bool:
+    """True when the box touches a study region (its exact boundary when one is stored)."""
+    from shapely.geometry import box
+
+    w, s, e, n = b
+    for R, poly in _region_shapes():
+        if w < R[2] and e > R[0] and s < R[3] and n > R[1] and (poly is None or poly.intersects(box(w, s, e, n))):
+            return True
+    return False
+
+
+@lru_cache(maxsize=1)
+def _flat_tile() -> bytes:
+    import warnings
+
+    from rasterio.errors import NotGeoreferencedWarning
+    from rasterio.io import MemoryFile
+
+    rgb = encode_terrarium(np.zeros((256, 256)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NotGeoreferencedWarning)
+        with MemoryFile() as mf:
+            with mf.open(driver="PNG", width=256, height=256, count=3, dtype="uint8") as d:
+                d.write(rgb)
+            return mf.read()
 _tile_locks: dict[tuple[int, int, int], threading.Lock] = {}
 
 
@@ -170,14 +253,20 @@ def terrain_tile_png(z: int, x: int, y: int) -> bytes:
     cache = get_settings().runtime_dir / "cache" / "terrain" / str(z) / str(x)
     path = cache / f"{y}.png"
     if path.exists():
-        return path.read_bytes()
+        with perf.span("terrain.cache_hit"):
+            return path.read_bytes()
+    if not _in_regions(tile_bounds(z, x, y)):
+        # Outside every study region: a flat sea-level tile, instantly, instead of remote reads.
+        with perf.span("terrain.outside_region"):
+            return _flat_tile()
     last: Exception | None = None
     with _tile_lock(z, x, y), _tile_slots:
         if path.exists():  # rendered by a concurrent request for the same tile
             return path.read_bytes()
         for attempt in range(3):  # transient HTTP failures from the public bucket are retried
             try:
-                return _render_tile(z, x, y, cache, path)
+                with perf.span("terrain.render", z=z):
+                    return _render_tile(z, x, y, cache, path)
             except (rasterio.errors.RasterioIOError, OSError) as exc:
                 last = exc
                 import time
@@ -191,7 +280,9 @@ def _render_tile(z: int, x: int, y: int, cache: Path, path: Path) -> bytes:
     size = 256
     res = max(NATIVE_DEG, (east - west) / size)
     pad = 2 * res
-    dem, tf, covered = read_dem(west - pad, max(-89.9, south - pad), east + pad, min(89.9, north + pad), res)
+    with perf.span("dem.read"):
+        dem, tf, covered = read_dem(west - pad, max(-89.9, south - pad), east + pad, min(89.9, north + pad), res,
+                                    cell_ok=lambda la, lo: _in_regions((lo, la, lo + 1, la + 1)))
     # Exact web-mercator sampling: each output row has its own latitude.
     n = 2 ** z
     ys = (y + (np.arange(size) + 0.5) / size) / n
@@ -254,7 +345,8 @@ def slope_percent(dem: np.ndarray, res_m: float) -> np.ndarray:
 
 
 def zone_terrain_stats(geom_lonlat) -> dict:
-    dem, tf, crs, gm = metric_dem(geom_lonlat)
+    with perf.span("dem.zone_window"):
+        dem, tf, crs, gm = metric_dem(geom_lonlat)
     slope = slope_percent(dem, 30.0)
     inside = ~geometry_mask([mapping(gm)], out_shape=dem.shape, transform=tf, all_touched=False)
     if inside.sum() == 0:  # polygon thinner than one cell: use touched cells
@@ -294,6 +386,61 @@ def heightmap(metric_bounds: tuple[float, float, float, float], crs: str, nx: in
     filled = np.where(np.isfinite(out), out, base)
     return {"nx": nx, "ny": ny, "min_m": round(base, 1), "max_m": round(float(filled.max()), 1),
             "heights_m": [round(float(v) - base, 1) for v in filled.ravel()], "source": SOURCE}
+
+
+def flow_path(lon: float, lat: float, max_km: float = 8.0, res_m: float = 30.0) -> dict:
+    """Downhill path on the Copernicus DEM from a start point: priority-flood + epsilon fill, then D8 steepest descent.
+
+    The path never rises on the filled surface (it can cross a closed depression, which fills with water first:
+    the raw-DEM rise inside depressions is reported). It traces where water and debris tend to run; it is a
+    terrain path, not a debris-flow model (no volume, rheology or runout physics).
+    """
+    from shapely.geometry import LineString, Point
+
+    from . import hydro
+    from .geo import lonlat_to_metric, metric_to_lonlat
+
+    if not (-180 <= lon <= 180 and -60 <= lat <= 60):
+        raise ValueError("invalid start point")
+    start = Point(lon, lat)
+    half = max_km * 1000
+    with perf.span("dem.flow_window"):
+        dem, tf, crs, gm = metric_dem(start.buffer(half / 111_000), margin_m=0, res_m=res_m)
+    h, w = dem.shape
+    col, row = ~tf * lonlat_to_metric(lon, lat, crs)
+    r, c = int(row), int(col)
+    if not (0 <= r < h and 0 <= c < w) or not np.isfinite(dem[r, c]):
+        raise TerrainUnavailable("No DEM value at the start point.")
+    with perf.span("dem.flow_trace"):
+        filled = hydro.priority_flood(dem, epsilon=1e-3)
+        rec = hydro.d8_receivers(filled, res_m).ravel()
+        path = [(r, c)]
+        k = r * w + c
+        limit = int(max_km * 1000 / res_m) * 2
+        for _ in range(limit):
+            k2 = int(rec[k])
+            if k2 < 0:
+                break
+            k = k2
+            path.append(divmod(k, w))
+    pts_m = [tf * (cc + 0.5, rr + 0.5) for rr, cc in path]
+    coords = [metric_to_lonlat(x, y, crs) for x, y in pts_m]
+    elev = [round(float(dem[rr, cc]), 1) for rr, cc in path]
+    fill_z = [float(filled[rr, cc]) for rr, cc in path]
+    pond_rise = max([0.0] + [elev[i] - elev[i - 1] for i in range(1, len(elev))])
+    line = LineString(pts_m) if len(pts_m) > 1 else None
+    return {
+        "type": "Feature",
+        "geometry": {"type": "LineString", "coordinates": [[round(x, 6), round(y, 6)] for x, y in coords]},
+        "properties": {"length_m": round(line.length, 1) if line else 0.0, "drop_m": round(elev[0] - elev[-1], 1),
+                       "start_elevation_m": elev[0], "end_elevation_m": elev[-1],
+                       "monotone_on_filled_surface": all(fill_z[i] <= fill_z[i - 1] + 1e-9 for i in range(1, len(fill_z))),
+                       "max_rise_inside_depressions_m": round(pond_rise, 2),
+                       "elevations_m": elev[:: max(1, len(elev) // 200)], "grid": f"{crs} at {res_m:g} m",
+                       "method": "priority-flood + epsilon (Barnes et al. 2014), D8 steepest descent (O'Callaghan & Mark 1984)",
+                       "source": SOURCE,
+                       "note": "Downhill terrain path. Not a debris-flow model: no volume or runout physics."},
+    }
 
 
 def ensure_dir(p: Path) -> Path:

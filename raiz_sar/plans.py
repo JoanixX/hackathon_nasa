@@ -37,6 +37,29 @@ def resolve_dataset(request: PlanRequest) -> dict[str, Any]:
     return {"summary": summary, "sectors": sectors}
 
 
+def load_nisar_evidence(request: PlanRequest, features: list[dict[str, Any]]) -> dict[str, Any]:
+    """Load the referenced NISAR evidence and check it was computed for exactly these zone geometries."""
+    import json
+
+    from .config import get_settings
+
+    path = get_settings().artifact_dir / "nisar_water" / str(request.nisar_run_id) / "evidence.json"
+    try:
+        ev = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PlanInputError("The referenced NISAR evidence was not found; run the NISAR water analysis again.") from exc
+    by_sid = {f["properties"]["sector_id"]: f for f in features}
+    zones = {}
+    for z in ev.get("zones", []):
+        f = by_sid.get(z.get("sector_id"))
+        if f is None:
+            continue
+        if content_hash(z.get("geometry_hash_basis")) != content_hash(f["geometry"]):
+            raise PlanInputError(f"NISAR evidence for {z['sector_id']} was computed for a different boundary; run it again.")
+        zones[z["sector_id"]] = z
+    return {"run_id": ev["run_id"], "event_date": ev["event"]["date"], "zones": zones, "evidence_version": ev["evidence_version"]}
+
+
 def build_plan(request: PlanRequest) -> PlantingPlan:
     ds = resolve_dataset(request)
     features = ds["sectors"]["features"]
@@ -49,7 +72,8 @@ def build_plan(request: PlanRequest) -> PlantingPlan:
     if request.selected_sector_ids is not None and set(request.selected_sector_ids) - set(ids):
         raise PlanInputError("Selection contains unknown sectors.")
     allowed = {s.species_id for s in species_for(request.scenario_id)}
-    eligibility = evaluate_eligibility(features, allowed, request)
+    nisar = load_nisar_evidence(request, features) if request.evidence_mode == "nisar" else None
+    eligibility = evaluate_eligibility(features, allowed, request, nisar)
     budget = allocate(features, eligibility, request)
     establishment = establishment_scenarios(request, budget)
     drone = plan_deposition(features, budget, request.drone, ds["summary"]["metric_crs"])

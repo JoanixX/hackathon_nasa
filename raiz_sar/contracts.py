@@ -109,8 +109,10 @@ class SpeciesCandidate(StrictModel):
     supplied_taxon: str | None
     review_status: Literal["unreviewed_source_candidate", "specialist_reviewed", "rejected"]
     scenarios: list[str]
-    asset_id: Literal["shrub_tree_small", "broad_tree", "dry_forest_tree"]
+    asset_id: Literal["shrub_tree_small", "broad_tree", "dry_forest_tree", "umbrella_tree", "round_shrub_tree"]
     note: str
+    water_need: Literal["low", "moderate", "unknown"] = "unknown"  # qualitative, pending specialist review
+    model: dict[str, Any] = Field(default_factory=dict)  # 3D form parameters for the tree digital twin (illustrative)
 
 
 class StudyAreaSummary(StrictModel):
@@ -125,7 +127,10 @@ class StudyAreaSummary(StrictModel):
     data_mode: DataMode
     dataset_version: str
     region_bbox: list[float] | None = None  # [west, south, east, north] where zones may be drawn
+    region_boundary: str | None = None  # stored exact boundary (raiz_sar/boundaries/<name>.geojson); zones must lie inside it
     primary: bool = False
+    listed: bool = True  # offered in the interface (owner decision 2026-11-15: Piura only)
+    focus_areas: list[dict[str, Any]] = Field(default_factory=list)  # [{name, lon, lat, zoom}]
 
 
 # --------------------------------------------------------------------------------------
@@ -171,9 +176,15 @@ class PlanRequest(StrictModel):
     delay_days: list[int] = Field(default_factory=lambda: [0, 15, 30, 45, 60])
     establishment_half_life_days: float | None = Field(default=None, gt=0, le=3650)
     imported_sectors: dict[str, Any] | None = None
+    # "nisar": candidate zones must carry NISAR-observed temporary water from the referenced evidence run.
+    # "manual": explicitly labelled planning without NISAR evidence (demo / field-led).
+    evidence_mode: Literal["nisar", "manual"] = "manual"
+    nisar_run_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{16}$")
 
     @model_validator(mode="after")
     def _mode_inputs(self) -> "PlanRequest":
+        if self.evidence_mode == "nisar" and not self.nisar_run_id:
+            raise ValueError("NISAR-informed planning requires nisar_run_id (run the NISAR water evidence first)")
         if self.mode == "budget" and self.budget_pen is None:
             raise ValueError("budget mode requires budget_pen")
         if self.mode == "target" and self.target_established_plants is None:
@@ -357,6 +368,7 @@ class ARFrame(StrictModel):
     vertical_exaggeration: float
     terrain: str
     datum_note: str
+    bbox_lonlat: list[float] | None = None  # [west, south, east, north] of the printed target's footprint
 
 
 class ScenePlacement(StrictModel):
@@ -452,7 +464,7 @@ class PlanningDraft(StrictModel):
 # --------------------------------------------------------------------------------------
 
 JobState = Literal["validating", "queued", "running", "ready", "partial", "failed", "cancelled"]
-JobKind = Literal["scene", "report", "sar_process", "sar_discover"]
+JobKind = Literal["scene", "report", "sar_process", "sar_discover", "ponding", "nisar_water"]
 
 
 class JobStatus(StrictModel):

@@ -33,11 +33,20 @@ def test_health_reports_modes_without_secrets():
     assert "key" not in json.dumps(h).lower().replace("key not configured", "")
 
 
-def test_both_scenarios_present_with_locators():
+def test_listed_scenarios_and_unlisted_fixture_stay_reachable():
     ids = {s["scenario_id"]: s for s in client.get("/api/scenarios").json()}
-    assert set(ids) == {"carabayllo-rio-seco", "lower-piura-sechura"}
-    assert ids["carabayllo-rio-seco"]["locator_lat"] == -11.83 and ids["lower-piura-sechura"]["locator_lon"] == -80.65
+    # The interface lists only Piura; the Carabayllo fixture stays reachable by id for tests.
+    assert set(ids) == {"lower-piura-sechura"}
+    assert ids["lower-piura-sechura"]["locator_lon"] == -80.65
+    assert {f["name"] for f in ids["lower-piura-sechura"]["focus_areas"]} >= {"Piura", "Sullana", "Paita", "Talara", "Sechura"}
+    hidden = scenario("carabayllo-rio-seco")["summary"]
+    assert hidden["listed"] is False and hidden["locator_lat"] == -11.83
     assert all(s["data_mode"] == "synthetic_fixture" for s in ids.values())
+
+
+def test_piura_species_are_at_most_three_low_water():
+    sp = scenario("lower-piura-sechura")["species"]
+    assert 1 <= len(sp) <= 3 and all(s["water_need"] == "low" for s in sp)
 
 
 def test_plan_version_is_deterministic_and_input_sensitive():

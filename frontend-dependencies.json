@@ -1,6 +1,6 @@
 {
-  "status": "ADR 0002 (2026-11-15): MapLibre replaces Leaflet; terra-draw added. Loaded from jsDelivr by index.html and app/ modules. Physical-device AR and SRI hashes pending.",
-  "research_date": "2026-11-15",
+  "status": "Ayumi / ADR 0006: same pinned map runtime, locally served with license and hashes; drawing/charts/AR remain lazy. Physical-device and scientific acceptance are separate.",
+  "research_date": "2026-11-16",
   "application_entry_point": "index.html",
   "application_modules": "app/*.js (native ES modules, no build step)",
   "node_tooling_major": 22,
@@ -9,7 +9,25 @@
       "version": "5.24.1",
       "role": "Map engine: vector basemap, raster layers, DEM terrain, hillshade, 3D twin",
       "license": "BSD-3-Clause",
-      "evidence": "https://data.jsdelivr.com/v1/packages/npm/maplibre-gl@5.24.1 (UMD dist/maplibre-gl.js); 6.x ships ESM plus worker only"
+      "evidence": "https://data.jsdelivr.com/v1/packages/npm/maplibre-gl@5.24.1 (UMD dist/maplibre-gl.js); 6.x ships ESM plus worker only",
+      "delivery": "same-origin vendored distribution; unchanged version",
+      "local_artifacts": {
+        "LICENSE.txt": {
+          "path": "assets/vendor/maplibre-gl-5.24.1/LICENSE.txt",
+          "sha256": "ee5fc05a0677eaf69601d2c7db0d9ecd6cc27c3abc1d0733bc9ed34707cf8ef2",
+          "upstream": "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/LICENSE.txt"
+        },
+        "maplibre-gl.css": {
+          "path": "assets/vendor/maplibre-gl-5.24.1/maplibre-gl.css",
+          "sha256": "ab1e70d59ec40465bae7e7030da2f3ccf28133fd502e62bd598eefbadfd7a732",
+          "upstream": "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.css"
+        },
+        "maplibre-gl.js": {
+          "path": "assets/vendor/maplibre-gl-5.24.1/maplibre-gl.js",
+          "sha256": "a9c9e2aa36d4d5b63b131f27c1272f1a28883eeecc0eddd1e0dbfae4033bc7c9",
+          "upstream": "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.js"
+        }
+      }
     },
     "terra-draw": {
       "version": "1.38.0",
@@ -56,7 +74,7 @@
     "Copernicus DEM GLO-30": "https://copernicus-dem-30m.s3.amazonaws.com/ (anonymous; via API terrain endpoint)"
   },
   "removed": {
-    "leaflet": "1.9.4 — replaced by MapLibre (ADR 0002)",
+    "leaflet": "1.9.4 \u2014 replaced by MapLibre (ADR 0002)",
     "tile.openstreetmap.org": "removed: tile usage policy and Referer requirement (ADR 0002)"
   },
   "devDependencies": {

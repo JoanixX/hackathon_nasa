@@ -7,10 +7,14 @@ import tempfile
 from pathlib import Path
 
 _RUNTIME = Path(tempfile.mkdtemp(prefix="raiz-test-"))
-os.environ.setdefault("RAIZ_RUNTIME_DIR", str(_RUNTIME))
-os.environ.setdefault("RAIZ_QUEUE_MODE", "inline")
-os.environ.setdefault("RAIZ_AI_PROVIDER", "fixture")
-os.environ.setdefault("RAIZ_DATA_DIR", str(_RUNTIME / "data"))
+# Tests never touch the live runtime, the configured AI key or Earthdata credentials of the container.
+os.environ["RAIZ_RUNTIME_DIR"] = str(_RUNTIME)
+os.environ["RAIZ_QUEUE_MODE"] = "inline"
+os.environ["RAIZ_AI_PROVIDER"] = "fixture"
+os.environ["RAIZ_DATA_DIR"] = str(_RUNTIME / "data")
+os.environ["RAIZ_INFRA_SOURCE"] = "none"  # zone confirmation does not fetch OSM infrastructure in unit tests
+for _k in ("GEMINI_API_KEY", "EARTHDATA_USERNAME", "EARTHDATA_PASSWORD", "EARTHDATA_TOKEN"):
+    os.environ.pop(_k, None)
 
 from hypothesis import HealthCheck, settings  # noqa: E402
 from hypothesis.database import DirectoryBasedExampleDatabase  # noqa: E402

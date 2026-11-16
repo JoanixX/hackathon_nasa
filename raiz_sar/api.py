@@ -17,7 +17,7 @@ from . import APP_NAME, SCHEMA_VERSION, db, jobs
 from .config import REPO_ROOT, get_settings
 from .contracts import PlanRequest
 from .gis_import import ImportErrorReport, normalize_feature_collection
-from .plans import PlanInputError, build_plan
+from .plans import PlanInputError, build_plan, plan_identity, resolve_dataset
 from .scenarios import SPECIES, get_scenario, scenario_ids
 
 MAX_BODY = 6 * 1024 * 1024
@@ -223,6 +223,11 @@ def create_plan(body: dict[str, Any]):
                 raise _error(404, "dataset_not_found", "Imported dataset version not found; import it again.")
             body["imported_sectors"] = ds
         req = PlanRequest.model_validate(body)
+        ds = resolve_dataset(req)
+        if req.evidence_mode != "nisar":
+            cached = db.load_plan(plan_identity(req, ds))
+            if cached is not None:
+                return cached
         plan = build_plan(req)
     except ValidationError as exc:
         raise _error(422, "invalid_plan_request", "Plan request failed validation.",
@@ -311,6 +316,24 @@ def create_report(body: ReportBody):
             raise _error(409, "stale_scene", "The scene belongs to a different plan version.")
         scene_ref = st.result_ref
     return _submit("report", {"plan_version": body.plan_version, "scene_ref": scene_ref}, body.plan_version)
+
+
+@app.post("/api/reports/preview")
+def preview_report(body: ReportBody):
+    """Complete reproducible municipal draft without a queue, network request or AI charge."""
+    from .contracts import PlantingPlan, FutureSceneSpecification
+    from .report import build_report
+    stored = db.load_plan(body.plan_version)
+    if stored is None:
+        raise _error(404, "plan_not_found", "Plan version not found.")
+    plan = PlantingPlan.model_validate(stored)
+    scene = None
+    if body.scene_job_id:
+        st = jobs.get(body.scene_job_id)
+        if st is None or st.state != "ready" or not st.result_ref or st.plan_version != plan.plan_version:
+            raise _error(409, "stale_scene", "The scene must be ready and belong to this plan.")
+        scene = FutureSceneSpecification.model_validate(jobs.read_artifact(st.result_ref))
+    return build_report(plan, resolve_dataset(plan.request), scene, None).model_dump(mode="json")
 
 
 @app.post("/api/sar/process", status_code=202)

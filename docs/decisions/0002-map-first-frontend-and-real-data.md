@@ -1,5 +1,7 @@
 # ADR 0002 — Map-first frontend, free real-data sources and Piura focus
 
+> Historical decision record. [ADR 0006](0006-ayumi-bounded-workflow-and-municipal-report.md) supersedes regional navigation, persistent settings, report delivery and sampling policy where they differ. The current public name is Ayumi; original decisions and their evidence are retained below.
+
 - **Date:** November 15, 2026.
 - **Status:** accepted by the owner on November 15, 2026 (approval of the frontend audit and its six recommendations).
 - **Amends:** [ADR 0001](0001-technology-stack.md) for the map engine, frontend file layout, basemap and imagery sources, and adds one Python dependency. The backend, job, AI and AR choices of ADR 0001 stand.

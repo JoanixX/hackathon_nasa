@@ -24,7 +24,9 @@ export async function checkRenderer(browser, base, out) {
       const source=window.qaMap.getCanvas(),c=document.createElement('canvas');c.width=source.width;c.height=source.height;
       const ctx=c.getContext('2d');ctx.drawImage(source,0,0);const d=ctx.getImageData(0,0,c.width,c.height).data;
       let green=0;for(let i=0;i<d.length;i+=4)if(d[i+1]>d[i]+10&&d[i+1]>d[i+2]+10)green++;
-      resolve({url:source.toDataURL('image/png'),green,stats:{...window.qaLayer.stats}});
+      ctx.fillStyle='#111';ctx.fillRect(0,0,c.width,40);ctx.fillStyle='#fff';ctx.font='14px sans-serif';
+      ctx.fillText('SYNTHETIC GPU FIXTURE — not a real tree inventory, terrain reconstruction or measured flow',12,25);
+      resolve({url:c.toDataURL('image/png'),green,stats:{...window.qaLayer.stats}});
     });window.qaMap.triggerRepaint();}));
     const on=await capture();
     await writeFile(out+'/renderer-fixture.png',Buffer.from(on.url.split(',')[1],'base64'));

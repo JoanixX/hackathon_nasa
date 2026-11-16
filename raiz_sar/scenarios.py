@@ -46,6 +46,8 @@ SPECIES: list[SpeciesCandidate] = [
         asset_id="broad_tree",
         note="Source candidate. Verify the supplied taxon and its local suitability before any prescription.",
     ),
+    # Piura: at most three plant types, chosen for low irrigation and fertilizer needs (owner
+    # decision 2026-11-15). Water need is qualitative (native dry-forest trees) and awaits specialist review.
     SpeciesCandidate(
         species_id="algarrobo",
         common_name="Algarrobo",
@@ -53,25 +55,48 @@ SPECIES: list[SpeciesCandidate] = [
         review_status="unreviewed_source_candidate",
         scenarios=["lower-piura-sechura"],
         asset_id="dry_forest_tree",
-        note="Source candidate for dry-forest establishment. Verify taxonomy, conservation constraints and seed source.",
+        water_need="low",
+        model={"height_m": 8.0, "crown_radius_m": 5.0, "crown_shape": "broad_flat", "trunk_ratio": 0.35,
+               "crown_color": "#5f8a3c", "trunk_color": "#6b4a2b"},
+        note="Native dry-forest tree of north-western Peru; deep roots, low irrigation need. Verify taxonomy, seed source and conservation rules.",
     ),
     SpeciesCandidate(
         species_id="sapote",
         common_name="Sapote",
-        supplied_taxon=None,
+        supplied_taxon="Colicodendron scabridum (commonly called sapote in the Piura dry forest; to be confirmed)",
         review_status="unreviewed_source_candidate",
         scenarios=["lower-piura-sechura"],
-        asset_id="dry_forest_tree",
-        note="Source candidate with unspecified taxon. A specialist must identify the taxon before use.",
+        asset_id="round_shrub_tree",
+        water_need="low",
+        model={"height_m": 6.0, "crown_radius_m": 3.5, "crown_shape": "rounded", "trunk_ratio": 0.3,
+               "crown_color": "#4f7d3a", "trunk_color": "#7a5636"},
+        note="The source did not specify the taxon; the dry-forest sapote is commonly Colicodendron scabridum. A specialist must confirm it.",
+    ),
+    SpeciesCandidate(
+        species_id="faique",
+        common_name="Faique",
+        supplied_taxon="Vachellia macracantha (added 2026-11-15; to be confirmed)",
+        review_status="unreviewed_source_candidate",
+        scenarios=["lower-piura-sechura"],
+        asset_id="umbrella_tree",
+        water_need="low",
+        model={"height_m": 7.0, "crown_radius_m": 4.0, "crown_shape": "umbrella", "trunk_ratio": 0.5,
+               "crown_color": "#7c9a46", "trunk_color": "#5c4030"},
+        note="Native thorn tree of the dry forest and ravines; drought tolerant. Added as the third low-water type; specialist review required.",
     ),
 ]
 
 SPECIES_BY_ID = {s.species_id: s for s in SPECIES}
+# Clearance kept between a planting point and mapped infrastructure: the largest mature crown radius of the candidate
+# species (their 3D model dimensions; illustrative, not field-measured crowns). Used by the plan, drone nodes and scene.
+SPECIES_MAX_CROWN_RADIUS_M = max((float((s.model or {}).get("crown_radius_m", 0.0)) for s in SPECIES), default=0.0)
 
 _SCENARIOS: dict[str, dict[str, Any]] = {
     "carabayllo-rio-seco": {
         "region_bbox": [-77.25, -12.05, -76.75, -11.6],
         "primary": False,
+        "listed": False,  # kept for tests and history; not offered in the interface since 2026-11-15
+        "focus_areas": [],
         "name": "Río Seco ravine / Carabayllo, northern Lima",
         "locator": (-11.83, -77.01),
         "metric_crs": "EPSG:32718",
@@ -92,9 +117,22 @@ _SCENARIOS: dict[str, dict[str, Any]] = {
         ],
     },
     "lower-piura-sechura": {
-        "region_bbox": [-81.4, -6.4, -79.2, -4.05],
+        # Piura department only (owner decision 2026-11-15): exact OSM boundary, relation 1986151; box = its bounds.
+        "region_bbox": [-81.33, -6.38, -79.21, -4.07],
+        "region_boundary": "piura_department",
         "primary": True,
-        "name": "Piura region — lower Piura dry forest and Sechura depression",
+        "listed": True,
+        # Priority areas named by the owner; coordinates are town centres (map navigation only).
+        "focus_areas": [
+            {"name": "Piura", "lon": -80.632, "lat": -5.195, "zoom": 13},
+            {"name": "Sullana", "lon": -80.685, "lat": -4.903, "zoom": 13},
+            {"name": "Paita", "lon": -81.114, "lat": -5.089, "zoom": 13.5},
+            {"name": "Talara", "lon": -81.272, "lat": -4.578, "zoom": 13.5},
+            {"name": "Sechura", "lon": -80.822, "lat": -5.557, "zoom": 13},
+            # Andean Piura (Huancabamba): where the department's high mountains and steep quebradas are.
+            {"name": "Huancabamba (Andes)", "lon": -79.451, "lat": -5.238, "zoom": 11.5},
+        ],
+        "name": "Piura",
         "locator": (-5.52, -80.65),
         "metric_crs": "EPSG:32717",
         "intervention_case": "Dry-forest establishment comparison on low-relief terrain",
@@ -182,7 +220,10 @@ def _build(scenario_id: str) -> dict[str, Any]:
         data_mode=DataMode.synthetic_fixture,
         dataset_version=version,
         region_bbox=spec["region_bbox"],
+        region_boundary=spec.get("region_boundary"),
         primary=spec["primary"],
+        listed=spec["listed"],
+        focus_areas=spec["focus_areas"],
     )
     return {"summary": summary.model_dump(mode="json"), "sectors": fc, "species": species}
 

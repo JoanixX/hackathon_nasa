@@ -1,5 +1,7 @@
 # ADR 0001 — Product-level GCOV pipeline and minimal AI/AR application stack
 
+> Historical decision record. [ADR 0006](0006-ayumi-bounded-workflow-and-municipal-report.md) supersedes regional navigation, persistent settings, report delivery and sampling policy where they differ. The current public name is Ayumi; original decisions and their evidence are retained below.
+
 - **Date:** November 14, 2026.
 - **Status:** selected for implementation planning by the agent within the owner's explicit request to define the stack; runtime/scientific acceptance remains pending.
 - **Scope:** RAÍZ-SAR AI, 48-hour demonstrator, one environmental/GIS engineer and two systems engineers.

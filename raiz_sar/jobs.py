@@ -29,10 +29,10 @@ LEGAL: dict[str, set[str]] = {
     "failed": {"queued"},
     "cancelled": {"queued"},
     "partial": {"queued"},
-    "ready": {"queued"},  # only when its artifact is missing (see submit); a ready job is never re-run otherwise
+    "ready": {"queued"},  # only when its artifact is missing or its owner expired it (see submit)
 }
 ACTIVE = {"validating", "queued", "running"}
-QUEUE_FOR = {"scene": "ai", "report": "ai", "sar_process": "sar", "sar_discover": "sar"}
+QUEUE_FOR = {"scene": "ai", "report": "ai", "sar_process": "sar", "sar_discover": "sar", "ponding": "evidence", "nisar_water": "sar"}
 
 
 class QueueFull(Exception):
@@ -102,14 +102,15 @@ def _enqueue(job_id: str, queue: str) -> None:
               result_ttl=3600, failure_ttl=86400)
 
 
-def submit(kind: str, inputs: dict[str, Any], plan_version: str | None) -> JobStatus:
+def submit(kind: str, inputs: dict[str, Any], plan_version: str | None, refresh_ready: bool = False) -> JobStatus:
+    """Idempotent submission. ``refresh_ready`` re-runs a ready job whose cached result has expired."""
     s = get_settings()
     queue = QUEUE_FOR[kind]
     jid = job_id_for(kind, inputs)
     reap_expired()
     existing = get(jid)
-    if existing and existing.state == "ready" and existing.result_ref and not artifact_exists(existing.result_ref):
-        pass  # the result was lost (disk cleanup): re-run instead of returning an empty ready job
+    if existing and existing.state == "ready" and (refresh_ready or (existing.result_ref and not artifact_exists(existing.result_ref))):
+        pass  # expired by its owner, or the result was lost (disk cleanup): re-run instead of returning it
     elif existing and existing.state in ACTIVE | {"ready"}:
         return existing  # idempotent: identical request returns the same job
     with engine().connect() as c:
@@ -229,10 +230,16 @@ def run(job_id: str) -> str:
     if cur is None or cur.state != "queued":
         return cur.state if cur else "missing"
     # Granule downloads (1-7 GB) need a longer lease than AI jobs; the reaper must not requeue them mid-download.
-    lease = int(time.time()) + s.job_lease_s * (24 if cur.kind == "sar_process" else 1)
+    lease = int(time.time()) + s.job_lease_s * (24 if cur.kind in ("sar_process", "nisar_water") else 1)
     if not transition(job_id, "queued", "running", attempts=cur.attempts + 1, lease_expires_at=lease):
         return get(job_id).state
-    from . import tasks  # noqa: F401  (registers handlers)
+    from . import perf, tasks  # noqa: F401  (registers handlers)
+
+    spans = perf.begin()
+    t0 = time.perf_counter()
+
+    def _log(state: str) -> None:
+        perf.log({"evt": "job", "kind": cur.kind, "job_id": job_id, "state": state, "ms": round((time.perf_counter() - t0) * 1000, 1), "spans": spans})
 
     try:
         ref = HANDLERS[cur.kind](inputs_of(job_id))
@@ -242,10 +249,13 @@ def run(job_id: str) -> str:
                        error_message=str(exc)[:500], lease_expires_at=None)
         else:
             transition(job_id, "running", "failed", error_code=exc.code, error_message=str(exc)[:500], lease_expires_at=None)
+        _log(get(job_id).state)
         return get(job_id).state
     except Exception as exc:  # unexpected: record without leaking internals to clients
         transition(job_id, "running", "failed", error_code="internal_error",
                    error_message=f"{type(exc).__name__}: {str(exc)[:300]}", lease_expires_at=None)
+        _log("failed")
         return get(job_id).state
     transition(job_id, "running", "ready", result_ref=ref, error_code=None, error_message=None, lease_expires_at=None)
+    _log("ready")
     return get(job_id).state

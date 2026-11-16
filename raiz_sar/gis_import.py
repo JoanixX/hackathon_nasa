@@ -136,6 +136,10 @@ def normalize_feature_collection(obj: Any, scenario_id: str, source_label: str) 
                 raise ValueError("empty geometry")
             if not geom.is_valid:
                 raise ValueError(f"invalid geometry: {explain_validity(geom)}")
+            from .scenarios import screening_scope
+            scope = screening_scope(scenario_id)
+            if scope is not None and not scope.covers(geom):
+                raise ValueError("outside the selected residential–ravine screening windows")
             raw = f.get("properties") or {}
             if not isinstance(raw, dict):
                 raise ValueError("properties must be an object")

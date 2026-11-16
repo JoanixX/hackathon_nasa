@@ -93,3 +93,47 @@ Additional acceptance criteria for the map-first refactor:
 | RZ-20 | Charts with real data or explicit unavailability | Rainfall (POWER), acquisition timeline (ASF catalog), DEM slope distribution, plan quantities; no placeholder series |
 | RZ-21 | Coherent 2D/3D/AR terrain | One DEM source for slope, MapLibre terrain and the AR mesh; vertical exaggeration declared |
 | RZ-22 | Guided, map-first UX | Step flow, contextual panel, onboarding, glossary, provenance on every layer; keyboard and 390 px layouts work |
+
+## Revision — November 15, 2026 (ADR 0003)
+
+| ID | Criterion | Verification |
+| --- | --- | --- |
+| RZ-23 | Ponding sites from observations | DSWx-HLS water polygons for the zone box and a rainy-season date; cloud reported as unknown; source and date shown |
+| RZ-24 | At most three low-water species | Scenario has 1–3 species, all `water_need: low`, each with a 3D model |
+| RZ-25 | 4–8 vertex zones | User picks the count before placing; API rejects drawn zones outside 4–8; suggestions simplified to ≤ 8 |
+| RZ-26 | Before/after and huayco views | Four 3D views render data (water, trees, mud front); huayco path from the DEM; "with trees" assumption declared; video recording available |
+| RZ-27 | Legend equals map colours | Every legend swatch is a colour painted by a visible 2D/3D layer |
+| RZ-28 | Measured performance | Per-request and per-job timings in `perf.jsonl` and `Server-Timing`; browser marks; `tools/perf_report.py` summary recorded |
+## Performance-first acceptance amendment (ADR 0004)
+
+The current [audit and delivery plan](PERFORMANCE_AUDIT.md) supersedes eager radar/relief startup. Historical location selectors and flat-AR descriptions above are not current acceptance evidence.
+
+| ID | Criterion | Verification |
+| --- | --- | --- |
+| RZ-29 | Conventional default map | Fresh browser loads streets/buildings/land cover with zero DEM, satellite-tile or catalog requests; analytical layers Off |
+| RZ-30 | Demand loading and stale-response isolation | Only requested layer/date work; cancellation/deduplication properties; input changes cannot apply old-area results |
+| RZ-31 | Priority-area detail within a speed budget | Regional-tile/asset experiment; cold/warm timings and memory/FPS on declared hardware; no flattened replacement for required 3D/AR |
+| RZ-32 | Exactness is traceable | Individual trees need measured identity/dimensions or scans; procedural species models retain illustrative status; current AR map texture is not 3D building geometry |
+| RZ-33 | Comparable four-view videos | Same camera, dates, plan version and terrain path; water/mud/vegetation parameters disclosed; recording cancellation and physical-device rendering verified |
+
+RZ-29 and software portions of RZ-30 are verified in this increment. RZ-31 through RZ-33 remain partially implemented or pending as detailed in the audit; a screenshot or attractive illustration does not close those gates.
+
+## NISAR water-evidence clarification
+
+RZ-03 requires a traceable NISAR observation → water/change analysis → metrics → candidate assessment → plan/3D/AR path. The current optical DSWx-HLS polygons and a separate NISAR image overlay do not satisfy this gate. Actual local processed files, a documented detection method, references for validation and versioned links to the planting decision are required. See [NISAR_EVIDENCE_INTEGRATION.md](NISAR_EVIDENCE_INTEGRATION.md). Keep missing/low-quality evidence blocked or unknown, preserve the fast conventional map, and do not substitute an optical product under a NISAR label.
+
+## Owner visual/spatial acceptance amendment — November 15, 2026
+
+The owner-reported failures reopen end-to-end tree/huayco/video acceptance. The [integration plan](NISAR_EVIDENCE_INTEGRATION.md) defines the full NV-01–NV-07 work packages and delivery sequence. Additional required gates are:
+
+| ID | Criterion | Required verification |
+| --- | --- | --- |
+| RZ-34 | Working visible 3D/tree/event flow | Recorded actual user interactions and visible content in the correct scene, not source counts alone |
+| RZ-35 | Growth and event timeskip | Visible stage-appropriate geometry growth and huayco arrival; play/pause/scrub/restart determinism; plant age and event seconds distinguished |
+| RZ-36 | Ravine start guard | Valid corridor accepted, known outside location rejected with a clear warning, insufficient evidence blocked with a different explanation; API enforcement and stale-version tests |
+| RZ-37 | Infrastructure and pedestrian exclusions | Full required placement/clearance envelopes avoid roads, houses/buildings and mapped pedestrian circulation at applicable stages, after geometry transforms and in AR/video/seed-deposition plans |
+| RZ-38 | NISAR water-detection quality | Actual local inputs, georeferenced source image/masks/metrics, independent reference evaluation of false/missed detections and unknown coverage; no invented sub-resolution puddles |
+| RZ-39 | Correct textured urban context | Reference-based building footprint completeness/correctness, georeferenced park geometry and paths, textured roads/water, readable 2D context and consistent 3D/AR placement |
+| RZ-40 | Complete video and performance evidence | All four clips decoded and inspected across their duration, visible growth/event movement, timestamps/duration consistent with the chosen timeline, target-device rendering and startup budget checks |
+
+These gates are pending in this amendment. NISAR supports the water/change evidence; detailed infrastructure/corridor geometry needs appropriate supplementary sources and validation. Unknown exclusions do not establish planting clearance. A water overlay does not establish road passability. Tree/flow visuals retain their assumptions and do not establish protection efficacy. Documentation-only work here creates no new executed application-test or scientific-validation evidence.

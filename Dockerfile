@@ -15,8 +15,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
-COPY requirements-linux-py312.lock ./
-RUN pip install --root-user-action=ignore --require-hashes -r requirements-linux-py312.lock
+# Same versions on both architectures; arm64 (free Oracle Cloud Ampere VM) uses its own wheel hashes.
+ARG TARGETARCH
+COPY requirements-linux-py312.lock requirements-linux-arm64-py312.lock ./
+RUN LOCK=requirements-linux-py312.lock; if [ "$TARGETARCH" = "arm64" ]; then LOCK=requirements-linux-arm64-py312.lock; fi; \
+    pip install --root-user-action=ignore --require-hashes -r "$LOCK"
 
 RUN useradd --create-home --uid 10001 raiz
 COPY --chown=raiz:raiz . /app

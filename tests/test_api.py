@@ -37,8 +37,8 @@ def test_listed_scenarios_and_unlisted_fixture_stay_reachable():
     ids = {s["scenario_id"]: s for s in client.get("/api/scenarios").json()}
     # The interface lists only Piura; the Carabayllo fixture stays reachable by id for tests.
     assert set(ids) == {"lower-piura-sechura"}
-    assert ids["lower-piura-sechura"]["locator_lon"] == -80.65
-    assert {f["name"] for f in ids["lower-piura-sechura"]["focus_areas"]} >= {"Piura", "Sullana", "Paita", "Talara", "Sechura"}
+    assert ids["lower-piura-sechura"]["locator_lon"] == -79.605
+    assert {f["name"] for f in ids["lower-piura-sechura"]["focus_areas"]} == {"Canchaque interfaces", "El Faique interfaces", "Huancabamba interfaces"}
     hidden = scenario("carabayllo-rio-seco")["summary"]
     assert hidden["listed"] is False and hidden["locator_lat"] == -11.83
     assert all(s["data_mode"] == "synthetic_fixture" for s in ids.values())

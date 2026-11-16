@@ -6,7 +6,7 @@ globalThis.location = { origin: "http://local" };
 globalThis.window = { matchMedia: () => ({ matches: false }) };
 class MapStub {
   constructor(opts) { this.opts = opts; this.layers = new Map([["labels", { id: "labels", type: "symbol" }], ["building", { id: "building", type: "fill", "source-layer": "building" }]]); this.sources = new Map(); this.additions = 0; queueMicrotask(() => this.load()); }
-  on(name, ...handlers) { if (name === "load") this.load = handlers.at(-1); }
+  on(name, ...handlers) { if (name === "style.load") this.load = handlers.at(-1); }
   addControl() {}
   getStyle() { return { layers: [...this.layers.values()], sources: { osm: { type: "vector" } } }; }
   getSource(id) { return this.sources.get(id); }
@@ -23,16 +23,39 @@ class MapStub {
   getContainer() { return { clientWidth: 1280, clientHeight: 800 }; }
   fitBounds(bounds, options) { this.fitOptions = options; }
   setLight() {} setSky() {} easeTo() {} getZoom() { return 14; }
+  setTransformConstrain(fn) { this.constrain=fn; }
 }
-globalThis.maplibregl = { Map: MapStub, NavigationControl: class {}, ScaleControl: class {} };
+globalThis.maplibregl = { Map: MapStub, LngLat:class {constructor(lng,lat){this.lng=lng;this.lat=lat;}}, NavigationControl: class {}, ScaleControl: class {} };
 const M = await import("../../app/map.js");
 const region = [-81.45, -6.4, -79.15, -3.35];
+
+test("terrain camera anchoring accepts valid source height once and ignores unknown elevation",()=>{
+  fc.assert(fc.property(fc.double({min:-500,max:9000,noNaN:true}),fc.double({min:-500,max:9000,noNaN:true}),(current,sample)=>{
+    if(M.terrainAnchorNeedsSync(current,sample)) {
+      assert.ok(Math.abs(current-sample)>.25);
+      assert.equal(M.terrainAnchorNeedsSync(sample,sample),false);
+    } else assert.ok(Math.abs(current-sample)<=.25||(sample===0&&current>0));
+    assert.equal(M.terrainAnchorNeedsSync(current,NaN),false);
+    assert.equal(M.terrainAnchorNeedsSync(Infinity,sample),false);
+  }),{numRuns:2000,seed:16112026});
+});
+
+test("camera centre stays inside the local window at bounded zoom without mutating input",()=>{
+  fc.assert(fc.property(fc.double({min:-180,max:180,noNaN:true}),fc.double({min:-85,max:85,noNaN:true}),fc.double({min:0,max:30,noNaN:true}),(lon,lat,zoom)=>{
+    const b=[-79.62,-5.4,-79.59,-5.37],before=b.slice(),v=M.constrainView([lon,lat],zoom,b);
+    assert.deepEqual(b,before);assert.ok(v.center[0]>=b[0]&&v.center[0]<=b[2]&&v.center[1]>=b[1]&&v.center[1]<=b[3]);
+    assert.ok(v.zoom>=13&&v.zoom<=18);
+    assert.deepEqual(M.constrainView(v.center,v.zoom,b),v);
+  }),{numRuns:2000,seed:16122026});
+});
 
 test("only explicit overlays create DEM; imagery sources stay bounded and opacity never reloads them", async () => {
   await fc.assert(fc.asyncProperty(fc.array(fc.tuple(fc.constantFrom("3d", "shade", "waterways", "nisar", "dswx"), fc.boolean()), { maxLength: 40 }), async actions => {
     const map = await M.initMap("map", { center: [-80.63, -5.19], zoom: 13, region });
     assert.equal(map.getSource("dem"), undefined);
-    assert.deepEqual(map.opts.maxBounds, [[region[0], region[1]], [region[2], region[3]]]);
+    assert.equal(map.opts.maxBounds,undefined);
+    const constrained=map.constrain({lng:0,lat:0},2);
+    assert.equal(constrained.center.lng,region[2]);assert.equal(constrained.center.lat,region[3]);assert.equal(constrained.zoom,13);
     let requestedDEM = false;
     for (const [key, on] of actions) {
       M.fitBounds(region, 60, on);

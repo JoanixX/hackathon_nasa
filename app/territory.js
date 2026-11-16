@@ -1,17 +1,17 @@
 // Lifecycle and compact controls for the existing map. Loaded only on first entry into 3D.
 import { el } from "./dom.js";
-import { PIURA_VIEWS, vegetationSamples, solarPosition, renderPolicy } from "./territory-geo.js";
+import { PIURA_VIEWS, vegetationSamples, solarPosition, renderPolicy, detailTier } from "./territory-geo.js";
 import { TerritoryLayer } from "./territory-gl.js";
 
 export function createTerritory(map, { onError, setBuildings, setHillshade, setMaterials, fitRegion, onChange = () => {} }) {
   const layer = new TerritoryLayer(onError), canvas = map.getCanvas();
-  const originalRatio=map.getPixelRatio();
+  const originalRatio=map.getPixelRatio?.() || canvas.width / Math.max(1,map.getContainer().clientWidth);
   const options = { trees: true, water: true, buildings: true, materials: true, shading: true, weather: "clear", animate: false, inspect: false };
-  let active = false, disposed = false, lost = false, timer = null, refreshTimer = null, pointRequest = null, epoch = 0;
+  let active = false, disposed = false, lost = false, timer = null, refreshTimer = null, pointRequest = null, epoch = 0, tier=0;
   const bindings = [];
   const info = el("p", { class: "note territory-inspect", id: "territory-inspect", role: "status" }, "Enable Inspect, then click a mapped element or the terrain.");
   const status = el("p", { class: "note", id: "territory-detail-status" });
-  const controls = el("details", { class: "block territory-controls", open: true }, el("summary", {}, "Piura · territorial view"));
+  const controls = el("details", { class: "block territory-controls", open: true }, el("summary", {}, "Current site · 3D settings"));
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let softwareGraphics=false;
   const quality=el("select",{id:"territory-quality"});
@@ -27,7 +27,7 @@ export function createTerritory(map, { onError, setBuildings, setHillshade, setM
   const places = el("div", { class: "territory-places" });
   for (const [key, view] of Object.entries(PIURA_VIEWS)) places.append(el("button", { type: "button", class: "btn quiet", "data-place": key, onclick: () => {
     if (view.bounds) fitRegion(view.bounds);
-    else map.easeTo({ center: view.center, zoom: view.zoom, bearing: view.bearing, pitch: 64, duration: motion.matches ? 0 : 1100 });
+    else map.easeTo({ bearing: view.bearing, pitch: view.pitch, duration: motion.matches ? 0 : 500 });
   } }, view.label));
   controls.append(places);
   const layers = el("div", { class: "territory-layers" },
@@ -57,22 +57,19 @@ export function createTerritory(map, { onError, setBuildings, setHillshade, setM
   function refresh() {
     clearTimeout(refreshTimer);refreshTimer=null;
     if(!active||disposed||lost||!map.isStyleLoaded())return;
-    if(map.getZoom()<13) {
+    tier=detailTier(map.getZoom(),tier);
+    if(tier===0) {
       layer.setData([],[],map.getCenter().toArray());
       status.textContent="Regional terrain. Zoom closer for forest and waterway detail (zoom 13+).";
       animate();return;
-    }
-    if(!map.isSourceLoaded("dem")) {
-      layer.setData([],[],map.getCenter().toArray());
-      status.textContent="Loading source terrain. Close-up detail is withheld until DEM tiles are ready.";
-      return;
     }
     const features=sourceFeatures(), bySourceLayer=f=>f.sourceLayer||f.layer?.["source-layer"];
     const cover=features.filter(f=>["landcover","park","landuse"].includes(bySourceLayer(f)));
     const exclusions=features.filter(f=>["transportation","building","water","waterway"].includes(bySourceLayer(f)));
     const center=map.getCenter().toArray();
-    const samples=options.trees?vegetationSamples(cover,exclusions,center,map.getZoom()):[];
-    const water=options.water?features.filter(f=>bySourceLayer(f)==="waterway"):[];
+    const ready=p=>{const h=map.queryTerrainElevation(p);return Number.isFinite(h)&&(h!==0||map.isSourceLoaded("dem"));};
+    const samples=options.trees?vegetationSamples(cover,exclusions,center,map.getZoom(),tier===2?500:120).filter(p=>ready([p.lon,p.lat])):[];
+    const water=options.water&&map.isSourceLoaded("dem")?features.filter(f=>bySourceLayer(f)==="waterway"):[];
     layer.setData(samples,water,center);
     status.textContent=`${layer.stats.trees} illustrative trees · ${layer.stats.waterSegments} waterway segments · detail at zoom 13+. ${exclusions.length>256?"Dense infrastructure: procedural trees withheld.":"Only loaded mapping is used."}`;
     animate();
@@ -128,7 +125,13 @@ export function createTerritory(map, { onError, setBuildings, setHillshade, setM
   map.addLayer(layer);
   const debug=layer.gl?.getExtension("WEBGL_debug_renderer_info");
   softwareGraphics=!!debug&&/swiftshader|llvmpipe|software|basic render/i.test(layer.gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
-  if(softwareGraphics){quality.value="0.5";controls.append(el("p",{class:"warnline"},"Software graphics detected: half resolution by default; animated effects are limited to one update per second. Hardware performance remains unverified."));}
+  quality.value=softwareGraphics?"0.5":"1";
+  if(softwareGraphics){
+    quality.value="0.5";
+    const animateInput=controls.querySelector('[data-territory="animate"]');animateInput.disabled=true;
+    animateInput.title="Continuous effects are unavailable in software graphics; static weather previews remain available.";
+    controls.append(el("p",{class:"warnline"},"Software graphics detected: half resolution and static weather previews. Continuous effects need hardware graphics; target-device performance is unverified."));
+  }
   listen("moveend",()=>{schedule();atmosphere();});listen("sourcedata",e=>{if(e.sourceId!=="dem"&&!['openmaptiles','overture'].includes(e.sourceId))return;schedule();});
   listen("terrain",schedule);listen("click",inspect);
   canvas.addEventListener("webglcontextlost",contextLost);canvas.addEventListener("webglcontextrestored",contextRestored);
@@ -146,5 +149,5 @@ export function createTerritory(map, { onError, setBuildings, setHillshade, setM
     if(map.getLayer(layer.id))map.removeLayer(layer.id);
   }
   listen("remove",dispose);
-  return { controls, options, stats:layer.stats, setActive, refresh:()=>{refresh();animate();}, dispose };
+  return { controls, options, stats:layer.stats, prepare:()=>map.setPixelRatio(resolution()), setActive, refresh:()=>{refresh();animate();}, dispose };
 }

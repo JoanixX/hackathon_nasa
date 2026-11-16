@@ -12,6 +12,7 @@ import * as T from "./twin.js";
 import { nisarCard, nisarWater, runNisar } from "./nisar.js";
 import { createTimeline, GROWTH_MONTHS } from "./timeline.js";
 import { overviewBlock } from "./overview.js";
+import { showDialog } from "./workflow.js";
 
 let timeline = null; // the one active timeline (growth + event) shared by the 3D views, controls and export
 export function disposeTimeline() { if (timeline) timeline.dispose(); timeline = null; }
@@ -115,7 +116,7 @@ export function explore() {
   const layers = el("div", { class: "block" }, el("h2", { text: "Map layers" }),
     el("p", { class: "note" }, "Every layer shows real observations on the dates listed. Pick a date to show it; the legend keeps the source and date."));
   layers.append(layerRow("nisar", "NISAR radar (GCOV)", state.dates.nisar, "Acquisition dates from the ASF catalog whose imagery covers this area. Areas without data stay transparent."));
-  layers.append(layerRow("rtc", "Sentinel-1 radar (OPERA RTC)", state.dates.rtc, "January–May 2026, covering the rainy season, when NISAR had not yet observed Piura."));
+  layers.append(layerRow("rtc", "Sentinel-1 radar (OPERA RTC)", state.dates.rtc, "Complementary C-band radar. Verify the returned dates and coverage for this local window."));
   layers.append(layerRow("dswx", "Surface water and ponding (DSWx-HLS)", state.dates.dswx, "Rainy-season dates with water observations here. Ponding (light blue) marks candidate low-irrigation planting sites to check in the field."));
   layers.append(layerRow("hls", "Optical context (HLS, 30 m)", state.dates.hls, "Dates in the last 30 days with pixels over this area; clouds may remain."));
   const rainDate = el("input", { type: "date", value: state.imagery.imerg || "", min: "2000-06-01", max: today(), "aria-label": "Rain rate date" });
@@ -614,7 +615,7 @@ export async function showView(view, st, { record = false } = {}) {
   disposeTimeline(); // one render loop at a time: a new view replaces the previous timeline
   T.clearAll();
   M.setData("future", null); M.setData("nodes", null);
-  if (!state.terrain3d) window.raiz.toggle3d(true);
+  if (!state.terrain3d) await window.raiz.toggle3d(true);
   const run = async () => {
     if (view === "before" || view === "after") {
       const bounds = state.scene.frame.bbox_lonlat || M.bboxOf({ features: plannedZones() });
@@ -687,7 +688,7 @@ export async function openAR() {
   const extras = { species: (state.scenario && state.scenario.species) || [], ponding: state.ponding || null, path: state.flowPath || null };
   try {
     // Bounded wait: the AR must start even if the map never settles (slow tiles, software WebGL).
-    if (s.frame.bbox_lonlat) extras.texture = await Promise.race([M.snapshot(s.frame.bbox_lonlat, 1024, s.frame.target_aspect),
+    if (state.textureOn && s.frame.bbox_lonlat) extras.texture = await Promise.race([M.snapshot(s.frame.bbox_lonlat, 1024, s.frame.target_aspect),
       new Promise((r) => setTimeout(() => r(null), 8000))]);
     mark("ar.snapshot", extras.texture ? "ok" : "timeout");
   } catch (e) { toast("The map snapshot for AR failed; the relief is shown without it."); }
@@ -812,28 +813,41 @@ export function report() {
   body.push(el("div", { class: "row" },
     el("button", { class: "btn primary", type: "button", onclick: () => makeReport(st) }, "Generate the draft"),
     el("button", { class: "btn", type: "button", disabled: !state.report, onclick: printReport }, "Print or save as PDF")), st);
-  if (state.report) body.push(reportDom(state.report));
+  if (state.report) body.push(el("button",{class:"btn detail-launch",type:"button","aria-label":"Open complete report",onclick:()=>showDialog("Municipal planning draft",reportDom(state.report))},"Open complete report"));
   return body;
 }
 
 async function makeReport(st) {
-  const res = await runJob({ kind: "report", path: "/api/reports", bound: true, currentPlan: () => state.plan && state.plan.plan_version,
-    body: { plan_version: state.plan.plan_version, scene_job_id: state.scene && state.sceneJob ? state.sceneJob.job_id : null }, onStatus: (m, k) => st.set(m, k) });
-  if (res && (res.state === "ready" || res.state === "partial") && res.result) { update({ report: res.result }); rerender(); }
+  const version=state.plan.plan_version;st.set("Preparing the municipal draft…","loading");
+  const started=performance.now();
+  try {
+    const draft=await post("/api/reports/preview",{plan_version:version,scene_job_id:state.scene&&state.sceneJob?state.sceneJob.job_id:null});
+    if(state.plan?.plan_version!==version)return;
+    mark("report.ready",`${Math.round(performance.now()-started)} ms · deterministic`);
+    update({report:draft});rerender();
+  }catch(error){st.set(error.message,"error");}
 }
 
 function reportDom(r, print = false) {
   const root = el("div", {});
   root.append(el("p", { class: print ? "watermark" : "warnline" }, r.status_label), el("h2", {}, r.title),
     el("p", { class: "note" }, `Report ${r.report_version}; plan ${r.plan_version}; AI narrative: ${r.ai_status.replaceAll("_", " ")}; created ${r.created_at} UTC.`));
-  const titles = { scope: "Scope", summary: "Summary", quantities: "Planned quantities", scene: "Future scenario", field_checks: "Field checks", monitoring: "Monitoring", risks: "Risks", limitations: "Limitations" };
-  for (const k of Object.keys(titles)) {
-    if (!r.sections[k]) continue;
-    root.append(el("h3", {}, titles[k]), el("ul", {}, ...r.sections[k].map((s) => el("li", {}, s.text, " ", el("span", { class: "badge b-unknown" }, s.authorship.replaceAll("_", " "))))));
+  const label=k=>k.replaceAll("_"," ").replace(/^./,c=>c.toUpperCase());
+  for (const [k,statements] of Object.entries(r.sections)) {
+    root.append(el("h3", {}, label(k)), el("ul", {}, ...statements.map((s) => el("li", {}, s.text, " ", el("span", { class: "badge b-unknown" }, s.authorship.replaceAll("_", " ")),
+      s.source_ids?.length?el("small",{},` Sources: ${s.source_ids.join(", ")}`):""))));
   }
-  const t = el("table", {}, el("tr", {}, ...["Zone", "Area (ha)", "Slope (%)", "Lat", "Lon", "Seeds", "Established", "Cost"].map((h) => el("th", {}, h))));
-  for (const s of r.tables.sectors) t.append(el("tr", {}, ...[s.sector_name, s.area_ha, s.slope_percent ?? "Unknown", s.lat, s.lon, s.seeds_released, s.expected_established, s.cost].map((v) => el("td", {}, String(v)))));
-  root.append(el("h3", {}, "Zones"), t, el("p", { class: "note" }, "Not an approved technical dossier. No institution has reviewed or endorsed it."));
+  for(const [key,rows]of Object.entries(r.tables)) {
+    if(!rows.length)continue;
+    const columns=Array.from(new Set(rows.flatMap(row=>Object.keys(row))));
+    const table=el("table",{},el("thead",{},el("tr",{},...columns.map(c=>el("th",{scope:"col"},label(c))))));
+    table.append(el("tbody",{},...rows.map(row=>el("tr",{},...columns.map(c=>{
+      const value=row[c]??"Unknown";
+      return el("td",{},c==="url"&&String(value).startsWith("https://")?el("a",{href:value,target:"_blank",rel:"noopener"},"Official source"):typeof value==="object"?JSON.stringify(value):String(value));
+    })))));
+    root.append(el("h3",{},label(key)),table);
+  }
+  root.append(el("p", { class: "note" }, "Not an approved technical dossier. No institution has reviewed or endorsed it."));
   return root;
 }
 

@@ -66,3 +66,7 @@ Current primary product/tool documentation, official PyPI metadata and frontend 
 - What data/schema constraints keep an AI future scene grounded and distinguish illustration from prediction?
 - What minimum evidence supports budget, seed quantities, establishment scenarios and any claimed benefit?
 - Which AR registration/device approach can demonstrate the core within the real team/timebox?
+
+## Performance and current product amendment — November 15, 2026
+
+The latest owner request requires Piura/Tumbes-only public navigation, a conventional map with optional overlays, strategic ponding-site planting assessment with at most three low-maintenance plant types, chosen 4–8 drawn vertices, and richer before/after 3D/AR views. See SOURCE_CONTEXT.md §§12–13, [the measured audit](PERFORMANCE_AUDIT.md) and [ADR 0004](decisions/0004-demand-driven-map-loading.md) for implementation status, primary technology references and remaining exact-asset/science/device gates. No new scientific claim follows from reducing load time.

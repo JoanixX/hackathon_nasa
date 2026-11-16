@@ -196,7 +196,7 @@ _tile_slots = threading.BoundedSemaphore(4)  # bound concurrent remote COG reads
 def _regions() -> tuple[tuple[float, float, float, float], ...]:
     from .scenarios import get_scenario, scenario_ids
 
-    return tuple(tuple(get_scenario(s)["summary"]["region_bbox"]) for s in scenario_ids() if get_scenario(s)["summary"].get("region_bbox"))
+    return tuple(b for b, _prepared in _region_shapes())
 
 
 @lru_cache(maxsize=1)
@@ -208,6 +208,10 @@ def _region_shapes() -> tuple:
     out = []
     for s in scenario_ids():
         summ = get_scenario(s)["summary"]
+        windows = [f["bounds"] for f in summ.get("focus_areas", []) if f.get("bounds")]
+        if windows:
+            out.extend((tuple(b), None) for b in windows)
+            continue
         if summ.get("region_bbox"):
             out.append((tuple(summ["region_bbox"]), boundary(summ["region_boundary"])[1] if summ.get("region_boundary") else None))
     return tuple(out)
@@ -252,6 +256,8 @@ def terrain_tile_png(z: int, x: int, y: int) -> bytes:
         raise ValueError("tile outside the supported range")
     cache = get_settings().runtime_dir / "cache" / "terrain" / str(z) / str(x)
     path = cache / f"{y}.png"
+    if not _in_regions(tile_bounds(z, x, y)):
+        return _flat_tile()
     if path.exists():
         with perf.span("terrain.cache_hit"):
             return path.read_bytes()
@@ -345,6 +351,14 @@ def slope_percent(dem: np.ndarray, res_m: float) -> np.ndarray:
 
 
 def zone_terrain_stats(geom_lonlat) -> dict:
+    import copy
+    return copy.deepcopy(_zone_stats_cached(geom_lonlat.wkb))
+
+
+@lru_cache(maxsize=128)
+def _zone_stats_cached(wkb: bytes) -> dict:
+    from shapely import from_wkb
+    geom_lonlat = from_wkb(wkb)
     with perf.span("dem.zone_window"):
         dem, tf, crs, gm = metric_dem(geom_lonlat)
     slope = slope_percent(dem, 30.0)

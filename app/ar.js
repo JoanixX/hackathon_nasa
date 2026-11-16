@@ -60,6 +60,9 @@ function register() {
         ? new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(X.texture) })
         : new THREE.MeshLambertMaterial({ color: 0xc9b48f, transparent: true, opacity: 0.9 });
       this.terrain = new THREE.Mesh(geo, terrainMat);
+      this.terrainTexture = terrainMat.map || null;
+      $("btn-ar-texture").disabled=!this.terrainTexture;
+      $("btn-ar-texture").setAttribute("aria-pressed",String(!!this.terrainTexture));
       this.group.add(this.terrain);
       this.toAR = makeProjector(s.frame);
       this.buildWater(X.ponding);
@@ -185,6 +188,11 @@ function register() {
     setStage(i) { this.stageIndex = Math.max(0, Math.min(3, i)); this.apply(); },
     setRoots(on) { this.rootsOn = on; this.apply(); },
     setEvidence(on) { this.evidence = on; this.apply(); },
+    setTexture(on) {
+      this.terrain.material.map=on?this.terrainTexture:null;
+      this.terrain.material.color.set(on&&this.terrainTexture?0xffffff:0xc9b48f);
+      this.terrain.material.needsUpdate=true;
+    },
   });
   AF.registerComponent("raiz-zone", {
     schema: { index: { type: "int" } },
@@ -214,6 +222,7 @@ function makeProjector(frame) {
 function comp() { const e = document.querySelector("[raiz-scene]"); return e && e.components["raiz-scene"]; }
 
 export function wireHud() {
+  $("btn-ar-texture").addEventListener("click",ev=>{const on=ev.currentTarget.getAttribute("aria-pressed")!=="true";ev.currentTarget.setAttribute("aria-pressed",String(on));comp()?.setTexture(on);});
   document.querySelectorAll("[data-ar-h]").forEach((b) => b.addEventListener("click", () => { const c = comp(); if (c) c.setStage(Number(b.dataset.arH)); }));
   $("btn-ar-roots").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = comp(); if (c) c.setRoots(on); });
   $("btn-ar-evidence").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = comp(); if (c) c.setEvidence(on); });

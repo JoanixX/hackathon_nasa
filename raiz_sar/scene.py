@@ -201,6 +201,13 @@ def _sample(geom, n: int, pattern: str, rng: random.Random) -> list[tuple[float,
     return pts
 
 
+def _frame_bbox_lonlat(frame: TabletopFrame, crs: str) -> list[float]:
+    """Geographic box covered by the printed target (used to drape the map onto the AR terrain)."""
+    pts = [metric_to_lonlat(*frame.from_ar(x, y), crs) for x in (-0.5, 0.5) for y in (-frame.aspect / 2, frame.aspect / 2)]
+    lons, lats = [p[0] for p in pts], [p[1] for p in pts]
+    return [round(min(lons), 6), round(min(lats), 6), round(max(lons), 6), round(max(lats), 6)]
+
+
 def _evidence_overlay(evidence: dict[str, Any] | None, frame: TabletopFrame, crs: str) -> dict[str, Any] | None:
     """Register the latest derived SAR preview onto the target plane (axis-aligned approximation)."""
     if not evidence:
@@ -235,6 +242,14 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
     alloc = {a.sector_id: a for a in plan.budget.allocations}
     no_go = [metric[sid].buffer(plan.request.drone.no_go_buffer_m) for sid, f in by_id.items()
              if f["properties"].get("exclusion_reason")]
+    # Mapped infrastructure keeps the whole mature crown clear (largest crown radius of the allowed species).
+    from .exclusions import exclusion_metric
+    from .scenarios import SPECIES_MAX_CROWN_RADIUS_M
+
+    for sid, f in by_id.items():
+        ex = exclusion_metric(f, crs)
+        if ex is not None:
+            no_go.append(ex.buffer(SPECIES_MAX_CROWN_RADIUS_M))
     no_go_u = unary_union(no_go) if no_go else None
 
     def outline(g) -> list[list[float]]:
@@ -292,7 +307,10 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
         x0, y0 = frame.from_ar(-0.5, -frame.aspect / 2)
         x1, y1 = frame.from_ar(0.5, frame.aspect / 2)
         try:
-            terrain_grid = terrain_fn((x0, y0, x1, y1), crs)
+            from . import perf
+
+            with perf.span("dem.heightmap"):
+                terrain_grid = terrain_fn((x0, y0, x1, y1), crs)
             relief = max(1.0, terrain_grid["max_m"] - terrain_grid["min_m"])
             # Terrain gets its own exaggeration: tallest relief at most 8% of the target width, never below ×1.
             terrain_ve = round(max(1.0, min(vertical_exaggeration, TERRAIN_MAX_AR_UNITS * frame.meters_per_unit / relief)), 1)
@@ -316,6 +334,7 @@ def assemble_scene(plan: PlantingPlan, dataset: dict[str, Any], ai: AIScenePlan,
             vertical_exaggeration=vertical_exaggeration,
             terrain=terrain_note,
             datum_note=f"Horizontal: WGS 84 projected to {crs}. Vertical: none. Tabletop scale, not survey-grade geolocation.",
+            bbox_lonlat=_frame_bbox_lonlat(frame, crs),
         ),
         zones=zones, placements=placements, deposition_points=deposition, stages=stages,
         evidence_overlay=_evidence_overlay(evidence, frame, crs),
@@ -349,10 +368,16 @@ def generate_scene(plan: PlantingPlan, dataset: dict[str, Any], provider, max_at
     schema = ai_schema()
     errors: list[str] = []
     seed = int(plan.plan_version[:8], 16) % (2**31)
+    from . import perf
+
     for attempt in range(1, max_attempts + 1):
         prompt = build_prompt(ctx, errors or None)
-        gen = provider.generate_json(SYSTEM_INSTRUCTION, prompt, schema, seed=seed)
-        ai, errors = validate_ai_plan(gen.text, ctx)
+        with perf.span("ai.inference", attempt=attempt):
+            gen = provider.generate_json(SYSTEM_INSTRUCTION, prompt, schema, seed=seed)
+        with perf.span("ai.validate", attempt=attempt):
+            ai, errors = validate_ai_plan(gen.text, ctx)
+        if errors:
+            perf.log({"evt": "ai_rejected", "attempt": attempt, "errors": errors[:8]})  # why a retry was needed
         if ai is not None:
             return assemble_scene(plan, dataset, ai, gen, prompt_hash(SYSTEM_INSTRUCTION, prompt, schema), attempt,
                                   evidence, terrain_fn)

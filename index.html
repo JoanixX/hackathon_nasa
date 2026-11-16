@@ -6,22 +6,21 @@
 <title>RAÍZ-SAR AI — Piura</title>
 <meta name="description" content="Map-first planning of root-forming vegetation for erosion and huaico-risk reduction in Piura, with NISAR and Sentinel-1 radar, HLS imagery, Copernicus terrain and an AI-assisted future scenario in AR.">
 <meta name="theme-color" content="#1b2226">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.css">
 <link rel="stylesheet" href="/app/styles.css">
-<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/terra-draw@1.38.0/dist/terra-draw.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/terra-draw-maplibre-gl-adapter@1.4.1/dist/terra-draw-maplibre-gl-adapter.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/maplibre-gl.js"></script>
 
 <!-- Pure, DOM-free logic shared by the app modules and the property tests (tests/js extract this block). -->
 <script id="raiz-core">
 (function (root) {
   "use strict";
   const HORIZONS = [0, 3, 6, 12];
-  const ASSETS = ["shrub_tree_small", "broad_tree", "dry_forest_tree"];
+  const ASSETS = ["shrub_tree_small", "broad_tree", "dry_forest_tree", "umbrella_tree", "round_shrub_tree"];
   const STAGES = ["seed_deposition", "germination", "early_establishment", "establishment"];
   const STEPS = ["explore", "zones", "evidence", "compare", "plan", "future", "report"];
   const JOB_LEGAL = {
@@ -258,10 +257,10 @@
 <section class="legend" id="legend" aria-label="Map legend and data provenance"></section>
 
 <div class="map-tools" role="group" aria-label="Map view">
-  <button class="tool" id="btn-3d" type="button" aria-pressed="false" title="Tilt the map over the Copernicus DEM terrain (3D twin)">3D terrain</button>
+  <button class="tool" id="btn-3d" type="button" aria-pressed="false" title="Explore Piura on real DEM geometry with territorial controls">3D territory</button>
   <div class="seg tool-seg" id="relief" role="group" aria-label="Vertical exaggeration of the relief" hidden>
-    <button type="button" data-ex="1" aria-pressed="true" title="True relief">×1</button>
-    <button type="button" data-ex="3" aria-pressed="false" title="Relief exaggerated three times">×3</button>
+    <button type="button" data-ex="1" aria-pressed="false" title="True relief">×1</button>
+    <button type="button" data-ex="3" aria-pressed="true" title="Relief exaggerated three times">×3</button>
     <button type="button" data-ex="6" aria-pressed="false" title="Relief exaggerated six times">×6</button>
   </div>
   <button class="tool" id="btn-ar-quick" type="button" title="Camera AR of the future scenario on the printed target">AR</button>
@@ -302,6 +301,8 @@
       <button type="button" data-ar-h="3">12 months</button>
     </div>
     <button class="btn" id="btn-ar-roots" type="button" aria-pressed="false">Illustrative roots</button>
+    <button class="btn" type="button" data-ar-huayco="trees">Huayco with trees</button>
+    <button class="btn" type="button" data-ar-huayco="none">Huayco without trees</button>
     <button class="btn" id="btn-ar-evidence" type="button" aria-pressed="true">Evidence layer</button>
     <p id="ar-caption"></p>
     <p id="ar-zone-info" aria-live="polite">Tap a zone outline to inspect it.</p>

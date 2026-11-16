@@ -88,7 +88,13 @@ def build_zone_dataset(scenario_id: str, zones: list[dict[str, Any]], terrain_fn
             n_vertices = len(geom.exterior.coords) - 1 if isinstance(geom, Polygon) else -1
             if not (MIN_ZONE_VERTICES <= n_vertices <= MAX_ZONE_VERTICES):
                 raise ZoneError(f"Zone {i + 1} has {n_vertices} vertices; a zone needs {MIN_ZONE_VERTICES} to {MAX_ZONE_VERTICES}.")
-        if summary.get("region_boundary"):
+        windows = [f["bounds"] for f in summary.get("focus_areas", []) if f.get("bounds")]
+        if windows:
+            from shapely.geometry import box
+            from shapely.ops import unary_union
+            if not unary_union([box(*b) for b in windows]).covers(geom):
+                raise ZoneError(f"Zone {i + 1} lies outside the selected residential–ravine screening windows.")
+        elif summary.get("region_boundary"):
             from .region import boundary
 
             _g, prepared, _meta = boundary(summary["region_boundary"])

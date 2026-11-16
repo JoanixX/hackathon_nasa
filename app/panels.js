@@ -1,11 +1,20 @@
 // One renderer per workflow step. Each returns the panel content for the current state.
-import { api, post, runJob } from "./api.js";
+import { api, post, runJob, evidence as evidenceJob } from "./api.js";
 import * as M from "./map.js";
 import * as D from "./draw.js";
 import * as Ch from "./charts.js";
 import { startAR } from "./ar.js";
 import { $, el, badge, toast, statusLine, explain } from "./dom.js";
 import { state, update, invalidate, focusBox, focusPoint } from "./state.js";
+import { mark } from "./perf.js";
+import { createLoadScope } from "./loading.js";
+import * as T from "./twin.js";
+import { nisarCard, nisarWater, runNisar } from "./nisar.js";
+import { createTimeline, GROWTH_MONTHS } from "./timeline.js";
+import { overviewBlock } from "./overview.js";
+
+let timeline = null; // the one active timeline (growth + event) shared by the 3D views, controls and export
+export function disposeTimeline() { if (timeline) timeline.dispose(); timeline = null; }
 
 const C = window.RaizCore;
 export const TITLES = { explore: "Explore", zones: "Zones", evidence: "Terrain and radar", compare: "After the rains",
@@ -14,59 +23,74 @@ export const LABELS = { explore: "Explore", zones: "Zones", evidence: "Evidence"
 
 let rerender = () => {};
 export function setRerender(fn) { rerender = fn; }
+export function clearCharts() { Ch.destroyAll(); }
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 
 // ------------------------------------------------------------------ data loaders
+const loads = createLoadScope();
+export function resetLoads() { loads.reset(); viewSequence += 1; state.layerLoading = {}; state.layerErrors = {}; }
+
 export async function loadAcquisitions() {
+  if (state.acquisitions && !state.acquisitions.error) return state.acquisitions;
   const b = focusBox();
-  if (!b) return;
-  try {
-    const q = new URLSearchParams({ west: b[0], south: b[1], east: b[2], north: b[3], start: "2025-10-01", end: today() });
-    const acq = await api(`/api/sources/acquisitions?${q}`);
-    const nisarAll = acq.datasets.nisar_gcov.map((d) => d.date);
-    const rtcAll = acq.datasets.opera_rtc.map((d) => d.date);
-    // Keep only dates whose imagery actually covers this area (catalog footprints are larger than the data).
-    const p = focusPoint();
-    const covered = async (layer, dates, min) => {
-      if (!dates.length) return { dates: [], cov: {} };
-      const q = new URLSearchParams({ layer, lon: p[0], lat: p[1], dates: dates.slice(-60).join(",") });
-      const r = await api(`/api/sources/coverage?${q}`);
-      const cov = Object.fromEntries(r.coverage.map((c) => [c.date, c.valid_fraction]));
-      return { dates: dates.filter((d) => (cov[d] || 0) >= min), cov };
-    };
-    // NISAR first (shown on load), then the rainy-season Sentinel-1 dates (January–May 2026).
-    const n = await covered("nisar_gcov", nisarAll, 0.3);
-    update({ acquisitions: acq, dates: { ...state.dates, nisar: n.dates }, coverage: { ...state.coverage, ...n.cov } });
-    if (!state.imagery.nisar && n.dates.length) {
-      // Show real radar first: the NISAR date covering most of this area (latest on ties).
-      const best = n.dates.slice().sort((a, b) => (n.cov[b] || 0) - (n.cov[a] || 0) || b.localeCompare(a))[0];
-      setLayer("nisar", best);
-    } else if (["explore", "evidence", "compare"].includes(state.step)) rerender();
-    const r = await covered("opera_rtc", rtcAll.filter((d) => d >= "2026-01-01" && d <= "2026-05-31").slice(-45), 0.3);
-    update({ dates: { ...state.dates, rtc: r.dates }, coverage: { ...state.coverage, ...r.cov } });
-  } catch (e) {
-    update({ acquisitions: { error: e.message } });
-  }
-  if (["explore", "evidence", "compare"].includes(state.step)) rerender();
+  if (!b) return null;
+  const q = new URLSearchParams({ west: b[0], south: b[1], east: b[2], north: b[3], start: "2025-10-01", end: today() });
+  return loads.run("catalog", async signal => {
+    try { return await api("/api/sources/acquisitions?" + q, { signal }); }
+    catch (error) { if (error.name === "AbortError") throw error; return { error: error.message }; }
+  }, acq => { update({ acquisitions: acq }); mark("data.acquisitions"); rerender(); });
 }
 
-export async function loadHlsDates() {
+/** Date probes are requested explicitly for one layer, never for all layers at startup. */
+export async function loadLayerDates(key) {
+  if (state.layerLoading[key] || state.dates[key] !== undefined) return;
+  state.layerLoading[key] = true; delete state.layerErrors[key]; rerender();
   const p = focusPoint();
-  if (!p) return;
-  try {
-    const q = new URLSearchParams({ layer: "hls_s30", lon: p[0], lat: p[1], start: daysAgo(60), end: daysAgo(1) });
-    const r = await api(`/api/sources/dates?${q}`);
-    update({ dates: { ...state.dates, hls: r.dates.map((d) => d.date).reverse() } });
-  } catch (e) {
-    update({ dates: { ...state.dates, hls: [], hlsError: e.message } });
-  }
-  if (state.step === "explore") rerender();
+  const result = await loads.run("dates:" + key, async signal => {
+    try {
+      if (key === "hls") {
+        const q = new URLSearchParams({ layer: "hls_s30", lon: p[0], lat: p[1], start: daysAgo(30), end: daysAgo(1) });
+        const r = await api("/api/sources/dates?" + q, { signal });
+        return { dates: r.dates.map(d => d.date), cov: {}, note: freshness(r) + (r.probe_errors ? ` ${r.probe_errors} date(s) could not be checked.` : "") };
+      }
+      let dates;
+      const layer = { nisar: "nisar_gcov", rtc: "opera_rtc", dswx: "dswx" }[key];
+      if (!layer) throw new Error("Unknown layer");
+      if (key === "dswx") {
+        dates = [];
+        for (let t = Date.UTC(2026, 1, 1); t <= Date.UTC(2026, 2, 31); t += 864e5) dates.push(new Date(t).toISOString().slice(0, 10));
+      } else {
+        const acq = await loadAcquisitions();
+        if (signal.aborted || !acq) return { dates: [], cov: {} };
+        if (acq.error) throw new Error(acq.error);
+        dates = acq.datasets[layer].map(d => d.date);
+        if (key === "rtc") dates = dates.filter(d => d >= "2026-01-01" && d <= "2026-05-31");
+      }
+      if (!dates.length) return { dates: [], cov: {} };
+      // API budget is 60 dates. Do not silently discard dates at a different limit.
+      dates = dates.slice(-60);
+      const q = new URLSearchParams({ layer, lon: p[0], lat: p[1], dates: dates.join(",") });
+      const r = await api("/api/sources/coverage?" + q, { signal });
+      const cov = Object.fromEntries(r.coverage.map(c => [c.date, c.valid_fraction]));
+      return { dates: dates.filter(d => cov[d] >= 0.3), cov, note: freshness(r) + (r.probe_errors ? ` ${r.probe_errors} date(s) could not be checked.` : "") };
+    } catch (error) { if (error.name === "AbortError") throw error; return { error: error.message }; }
+  }, result => {
+    state.layerLoading[key] = false;
+    if (result.error) state.layerErrors[key] = result.error;
+    else { state.dates[key] = result.dates; state.coverage[key] = result.cov; state.layerNotes[key] = (result.note || "").trim(); }
+    mark("data." + key + ".dates", result.error || String(result.dates.length));
+    rerender();
+  });
+  return result;
 }
+
+export const loadHlsDates = () => loadLayerDates("hls");
 
 export function setLayer(key, date) {
   state.imagery[key] = date;
-  M.setImagery(key, date, key === "imerg" ? 0.7 : key === "hls" ? 0.95 : 0.75);
+  if (date) { mark(`layer.${key}.set`, date); M.getMap().once("idle", () => mark(`layer.${key}.idle`, date)); }
+  M.setImagery(key, date, key === "dswx" ? 1 : key === "imerg" ? 0.7 : key === "hls" ? 0.95 : 0.75);
   rerender();
 }
 
@@ -75,27 +99,39 @@ export function explore() {
   const s = state.scenario;
   const body = [];
   body.push(el("p", { class: "lead" },
-    "Find where root-forming vegetation could reduce erosion and huaico risk. Look at the terrain and the radar, then draw the zones you want to assess."));
-  const areas = el("fieldset", { class: "block" }, el("legend", { class: "sr-only" }, "Study area"), el("h2", { text: "Study area" }));
-  for (const sc of state.scenarios) {
-    const input = el("input", { type: "radio", name: "area", value: sc.scenario_id, checked: sc.scenario_id === state.scenarioId });
-    input.addEventListener("change", () => window.raiz.selectScenario(sc.scenario_id));
-    areas.append(el("label", { class: "choice" }, input, el("span", {},
-      el("span", { class: "t" }, sc.primary ? "Piura (primary)" : "Carabayllo, Lima (secondary)"),
-      el("span", { class: "d" }, sc.intervention_case))));
+    "Find potential planting sites around rainwater ponding, using up to three candidate plant types with low irrigation and fertilizer needs. Inspect evidence and field conditions before choosing a site."));
+  const areas = el("div", { class: "block" }, el("h2", { text: "Piura" }),
+    el("p", { class: "note" }, "Jump to a priority area. Data and dates follow the area you choose."));
+  const row = el("div", { class: "row" });
+  for (const fa of (s ? s.summary.focus_areas : [])) {
+    row.append(el("button", { class: "btn", type: "button", "aria-pressed": String(state.focusArea && state.focusArea.name === fa.name),
+      onclick: () => window.raiz.goToArea(fa) }, fa.name));
   }
+  areas.append(row);
   body.push(areas);
+  if (s) body.push(overviewBlock(rerender));
   if (s) body.push(el("p", { class: "note" }, s.summary.hazard_mechanism_note));
 
   const layers = el("div", { class: "block" }, el("h2", { text: "Map layers" }),
     el("p", { class: "note" }, "Every layer shows real observations on the dates listed. Pick a date to show it; the legend keeps the source and date."));
   layers.append(layerRow("nisar", "NISAR radar (GCOV)", state.dates.nisar, "Acquisition dates from the ASF catalog whose imagery covers this area. Areas without data stay transparent."));
-  layers.append(layerRow("rtc", "Sentinel-1 radar (OPERA RTC)", state.dates.rtc, "January–June 2026, covering the rainy season, when NISAR had not yet observed Piura."));
-  layers.append(layerRow("hls", "Optical context (HLS, 30 m)", state.dates.hls, "Dates in the last 60 days with pixels over this area; clouds may remain."));
+  layers.append(layerRow("rtc", "Sentinel-1 radar (OPERA RTC)", state.dates.rtc, "January–May 2026, covering the rainy season, when NISAR had not yet observed Piura."));
+  layers.append(layerRow("dswx", "Surface water and ponding (DSWx-HLS)", state.dates.dswx, "Rainy-season dates with water observations here. Ponding (light blue) marks candidate low-irrigation planting sites to check in the field."));
+  layers.append(layerRow("hls", "Optical context (HLS, 30 m)", state.dates.hls, "Dates in the last 30 days with pixels over this area; clouds may remain."));
   const rainDate = el("input", { type: "date", value: state.imagery.imerg || "", min: "2000-06-01", max: today(), "aria-label": "Rain rate date" });
   rainDate.addEventListener("change", () => setLayer("imerg", rainDate.value || null));
   layers.append(el("div", { class: "row" }, el("label", { text: "Rain rate (GPM IMERG, about 10 km)" }), rainDate,
     el("button", { class: "btn quiet", type: "button", onclick: () => setLayer("imerg", null) }, "Hide")));
+  const controls = el("div", { class: "row" });
+  for (const [key, title] of [["hillshade", "Terrain shading"], ["waterways", "Highlight waterways"]]) {
+    if (key === "hillshade" && state.terrain3d) continue; // territorial controls own shading while in 3D
+    controls.append(el("button", { class: "btn", type: "button", "aria-pressed": String(state.overlays[key]), onclick: () => {
+      state.overlays[key] = !state.overlays[key];
+      if (key === "hillshade") M.setHillshade(state.overlays[key]); else M.setVisibility(["quebradas", "rivers"], state.overlays[key]);
+      rerender();
+    } }, title));
+  }
+  layers.append(controls);
   body.push(layers);
   body.push(el("div", { class: "block" }, el("button", { class: "btn primary", type: "button", onclick: () => window.raiz.go("zones") }, "Draw zones to assess")));
   return body;
@@ -104,24 +140,36 @@ export function explore() {
 function layerRow(key, title, dates, hint) {
   const info = M.LAYER_INFO[key];
   const sel = el("select", { "aria-label": `${title} date` });
-  sel.append(el("option", { value: "" }, dates === undefined ? "Loading dates…" : dates && dates.length ? "Off" : "No dates available"));
+  sel.append(el("option", { value: "" }, "Off"));
   for (const d of (dates || []).slice().reverse()) {
-    const c = state.coverage && state.coverage[d];
+    const c = state.coverage[key] && state.coverage[key][d];
     sel.append(el("option", { value: d, selected: d === state.imagery[key] }, c !== undefined && c < 0.9 ? `${d} (covers about ${Math.round(c * 100)}% of the area)` : d));
   }
   sel.disabled = !dates || !dates.length;
   sel.addEventListener("change", () => setLayer(key, sel.value || null));
-  return el("div", { class: "block" }, el("h3", {}, title, " ", badge(info.cls)), el("p", { class: "note" }, hint), sel, explain(info.explain));
+  return el("div", { class: "block" }, el("h3", {}, title, " ", badge(info.cls)), el("p", { class: "note" }, hint),
+    dates === undefined ? el("button", { class: "btn", type: "button", disabled: !!state.layerLoading[key], onclick: () => loadLayerDates(key) }, state.layerLoading[key] ? "Checking dates…" : "Load available dates") : null,
+    state.layerErrors[key] ? el("p", { class: "errline" }, state.layerErrors[key]) : null,
+    state.layerNotes[key] ? el("p", { class: "warnline" }, state.layerNotes[key]) : null,
+    dates && !dates.length ? el("p", { class: "note" }, "No dates with coverage found in the checked period.") : null,
+    sel, explain(info.explain));
 }
 
 // ------------------------------------------------------------------ 2. Zones
 export function zones() {
   const body = [el("p", { class: "lead" },
-    "Click on the map to place vertices; click the first vertex or double-click to close the zone. Choose Edit to drag vertices or the whole zone; right-click a vertex to delete it.")];
+    "Choose how many vertices the zone will have (4 to 8), then click on the map to place them. The zone closes itself on the last vertex. Select a zone to drag its vertices; the count stays fixed.")];
   const st = statusLine();
-  body.push(el("div", { class: "row" },
-    el("button", { class: "btn primary", type: "button", onclick: () => { D.setMode("polygon"); st.set("Drawing: click to add vertices, click the first vertex to close."); } }, "Draw a zone"),
-    el("button", { class: "btn", type: "button", onclick: () => { D.setMode("select"); st.set("Editing: select a zone to move or delete vertices."); } }, "Edit"),
+  const nSel = el("select", { "aria-label": "Number of vertices", id: "vertex-count" });
+  for (let n = D.MIN_VERTICES; n <= D.MAX_VERTICES; n++) nSel.append(el("option", { value: String(n), selected: n === (window.raiz.vertexCount || 6) }, `${n} vertices`));
+  nSel.addEventListener("change", () => { window.raiz.vertexCount = Number(nSel.value); });
+  const startBtn = el("button", { class: "btn primary", type: "button", onclick: async () => {
+    try { await window.raiz.ensureDraw(); } catch (e) { st.set(e.message, "error"); return; }
+    const n = Number(nSel.value);
+    window.raiz.vertexCount = n;
+    D.startPlacing(n, (k, total, done) => st.set(done ? `Zone closed with ${total} vertices.` : `Place vertex ${k + 1} of ${total} (Esc cancels).`, done ? "ok" : "info"));
+  } }, "Place the vertices");
+  body.push(el("div", { class: "row" }, nSel, startBtn,
     el("button", { class: "btn quiet", type: "button", onclick: () => { D.clear(); update({ suggestion: null }); M.setData("suggestion", null); } }, "Delete all")), st);
 
   const list = el("div", { class: "block" }, el("h2", { text: `Drawn zones (${state.drawn.length})` }));
@@ -214,7 +262,8 @@ async function confirmZones(st) {
     window.raiz.drawZones();
     rerender();
     toast(`${out.sectors.features.length} zone(s) confirmed with DEM slope.`);
-    loadAcquisitions();
+    resetLoads();
+    update({ acquisitions: null, dates: {}, coverage: {} });
   } catch (e) { st.set(e.message, "error"); }
 }
 
@@ -257,8 +306,13 @@ function zoneSummary() {
 
 // ------------------------------------------------------------------ 3. Evidence
 export function evidence() {
+  if (!state.acquisitions) loadAcquisitions();
   const feats = state.dataset.sectors.features;
-  const body = [el("p", { class: "lead" }, "How steep are the zones, and which radar observations exist for them?")];
+  const body = [el("p", { class: "lead" }, "Where did NISAR observe rainwater ponding in your zones, and how steep are they?")];
+  // NISAR is the primary evidence: it starts automatically for confirmed real zones (cached per area).
+  if (state.dataset && state.datasetKind !== "demo" && !state.nisar) runNisar(rerender);
+  body.push(nisarCard(rerender));
+  body.push(hydrologyBlock());
   const withTerrain = feats.filter((f) => f.properties.terrain).map((f) => ({ name: f.properties.sector_name, terrain: f.properties.terrain }));
   const tb = el("div", { class: "block" }, el("h2", {}, "Slope ", badge("derived")));
   if (withTerrain.length) {
@@ -294,6 +348,8 @@ export function evidence() {
 
 // ------------------------------------------------------------------ 4. Compare (post-rainfall)
 export function compare() {
+  if (!state.acquisitions) loadAcquisitions();
+  if (state.dates.rtc === undefined && !state.layerLoading.rtc && !state.layerErrors.rtc) loadLayerDates("rtc");
   const body = [el("p", { class: "lead" },
     "Did the 2026 rains change the surface? NISAR began observing Piura in June 2026, so the rainy season is compared with Sentinel-1 radar on its real acquisition dates.")];
   const rb = el("div", { class: "block" }, el("h2", {}, "Rain, January to May 2026 ", badge("modeled")));
@@ -348,9 +404,10 @@ export function compare() {
 
 async function loadRain() {
   const p = focusPoint();
-  try { update({ rain: await api(`/api/sources/rainfall?lat=${p[1]}&lon=${p[0]}&start=2026-01-01&end=2026-05-31`) }); }
-  catch (e) { update({ rain: { error: e.message } }); }
-  if (state.step === "compare") rerender();
+  return loads.run("rain", async signal => {
+    try { return await api(`/api/sources/rainfall?lat=${p[1]}&lon=${p[0]}&start=2026-01-01&end=2026-05-31`, { signal }); }
+    catch (e) { if (e.name === "AbortError") throw e; return { error: e.message }; }
+  }, rain => { update({ rain }); if (state.step === "compare") rerender(); });
 }
 
 function showCompare() {
@@ -392,12 +449,20 @@ export function plan() {
       num("halflife", "Establishment half-life for delay scenarios (days; empty = not estimated)", { min: "1" }),
       el("p", { class: "note" }, "Replace these placeholders with specialist values; results are planning quantities, not predictions."))));
   const st = statusLine();
-  body.push(el("div", { class: "block" }, el("button", { class: "btn primary", type: "button", onclick: () => computePlan(st) }, "Compute the plan"), st));
+  const ready = state.nisar && state.nisar.status === "ready";
+  body.push(el("div", { class: "block" }, el("h2", {}, "Evidence for this plan"),
+    ready ? el("p", { class: "note" }, `NISAR-informed: zones are candidates only where NISAR observed new surface water on ${state.nisar.result.event.date} (evidence ${state.nisar.result.evidence_version}).`)
+      : el("p", { class: "warnline" }, state.datasetKind === "demo" ? "Demo zones have no NISAR evidence: the plan is manual and labelled as such."
+        : "NISAR evidence is not ready, so a NISAR-informed plan is blocked. Open the Evidence step to run it, or compute a plan explicitly labelled manual.")));
+  body.push(el("div", { class: "block" },
+    el("div", { class: "row" },
+      el("button", { class: "btn primary", type: "button", disabled: !ready, onclick: () => computePlan(st, "nisar") }, "Compute the NISAR-informed plan"),
+      el("button", { class: "btn", type: "button", onclick: () => computePlan(st, "manual") }, "Manual plan (not NISAR-informed)")), st));
   if (state.plan) body.push(planResults());
   return body;
 }
 
-async function computePlan(st) {
+async function computePlan(st, evidenceMode = "nisar") {
   const v = window.raiz.planInputs;
   const species = {};
   for (const f of state.dataset.sectors.features) {
@@ -410,6 +475,8 @@ async function computePlan(st) {
     assumptions: { target_density_plants_per_ha: v.density, seeds_per_capsule: v.spc, germination_fraction: v.germ, establishment_fraction: v.est,
       capsule_cost_pen: v.capcost, delivery_cost_per_ha_pen: v.deliv, maintenance_cost_per_ha_pen: v.maint, monitoring_fixed_cost_pen: v.monit, max_slope_percent: 100 },
     establishment_half_life_days: v.halflife || null,
+    evidence_mode: evidenceMode,
+    nisar_run_id: evidenceMode === "nisar" && state.nisar && state.nisar.result ? state.nisar.result.run_id : null,
   };
   if (state.datasetKind !== "demo") req.imported_dataset_version = state.dataset.dataset_version;
   st.set("Computing…");
@@ -459,17 +526,18 @@ export function future() {
     el("h2", {}, s.title, " ", badge(s.inference.mode === "actual_inference" ? "ai_generated" : "fixture")),
     el("p", { class: "note" }, `${s.inference.provider} / ${s.inference.model}; validated before assembly; plan ${s.plan_version}.`),
     el("div", { class: "seg", role: "group", "aria-label": "Time horizon" }, ...["Seeds", "3 months", "6 months", "12 months"].map((t, i) =>
-      el("button", { type: "button", "aria-pressed": String(state.futureStage === i), onclick: () => { update({ futureStage: i }); window.raiz.drawFuture(); } }, t))),
+      el("button", { type: "button", "aria-pressed": String(state.futureStage === i), onclick: () => { closeViews(); update({ futureStage: i }); window.raiz.drawFuture(); } }, t))),
     el("p", {}, s.stages[state.futureStage].caption),
     el("p", { class: "note" }, s.uncertainty_note),
     el("p", { class: "note" }, `${s.labels.marker}. ${s.frame.terrain}`),
     state.plan.budget.allocations.some((a) => a.capsules > 0 && a.funded_fraction < 1)
       ? el("p", { class: "warnline" }, "The budget funds only part of a zone. That part is drawn as the zone's core: the planting location inside the zone is not optimized.")
       : null));
+  body.push(twinViews());
   body.push(el("div", { class: "block" }, el("h2", { text: "See it in 3D or AR" }),
     el("div", { class: "row" },
       el("button", { class: "btn", type: "button", onclick: () => window.raiz.toggle3d(true) }, "3D terrain view"),
-      el("button", { class: "btn primary", type: "button", onclick: () => startAR(state.scene) }, "Start camera AR")),
+      el("button", { class: "btn primary", type: "button", onclick: () => openAR() }, "Start camera AR")),
     el("ol", { class: "note" },
       el("li", {}, "Print the target or show it on a second screen: ", el("a", { href: "/assets/ar/target.png", target: "_blank", rel: "noopener" }, "open the AR target"), "."),
       el("li", {}, "Press Start camera AR and allow the camera."),
@@ -477,6 +545,252 @@ export function future() {
     el("p", { class: "note" }, "The 3D terrain view is the georeferenced twin on the map. Camera AR registers the same scene to the printed target at tabletop scale; it is not survey-grade geolocation.")));
   body.push(el("div", { class: "row" }, el("button", { class: "btn", type: "button", onclick: () => window.raiz.go("report") }, "Write the planning draft")));
   return body;
+}
+
+// ------------------------------------------------------------------ 3D before/after views
+const VIEWS = [
+  ["before", "Before: ponding after rain"],
+  ["after", "After: planted trees"],
+  ["huayco_trees", "Huayco with the trees"],
+  ["huayco_none", "Huayco without the trees"],
+];
+
+function plannedZones() {
+  const funded = new Set((state.plan ? state.plan.budget.allocations : []).filter((a) => a.capsules > 0).map((a) => a.sector_id));
+  return state.dataset ? state.dataset.sectors.features.filter((f) => funded.has(f.properties.sector_id)) : [];
+}
+
+/** " Last valid copy from N h ago" when the provider failed and a cached result was served. */
+export function freshness(r) {
+  const c = r && r.cache;
+  if (!c || !c.stale) return "";
+  const h = c.age_s / 3600;
+  return " Last valid copy from " + (h < 1 ? Math.max(1, Math.round(c.age_s / 60)) + " min" : h < 48 ? Math.round(h) + " h" : Math.round(h / 24) + " days") + " ago: the provider did not answer now.";
+}
+
+let viewSequence = 0;
+export function closeViews() { viewSequence += 1; state.twinView = null; disposeTimeline(); T.clearAll(); }
+function ensurePonding() {
+  // NISAR-observed water first (the required evidence); DSWx-HLS optical only when no NISAR result exists.
+  const nw = nisarWater();
+  if (nw) return Promise.resolve({ ...nw, water: nw.features.length, cloud_fraction: 0, nisar: true });
+  if (state.ponding) return Promise.resolve(state.ponding);
+  const b = focusBox();
+  return loads.run("ponding", async signal => {
+    const candidates = ["2026-02-12", "2026-02-27", "2026-03-14", "2026-02-09", "2026-01-13"];
+    const results = await Promise.all(candidates.map(async date => {
+      const q = new URLSearchParams({ west: b[0], south: b[1], east: b[2], north: b[3], date });
+      try { const r = await evidenceJob("/api/sources/ponding?" + q, { signal }); return { ...r, water: r.pixel_counts.open_water + r.pixel_counts.partial_water }; }
+      catch (e) { if (e.name === "AbortError") throw e; return null; }
+    }));
+    const valid = results.filter(Boolean).sort((a, b) => b.water - a.water);
+    if (!valid.length) throw new Error("Water evidence is unavailable; ponding is unknown.");
+    return valid[0];
+  }, best => { state.ponding = best; mark("data.ponding", best.date); });
+}
+
+function ensurePath() {
+  if (state.flowPath) return Promise.resolve(state.flowPath);
+  const initialStart = state.huaycoStart;
+  const z = plannedZones()[0] || (state.dataset && state.dataset.sectors.features[0]);
+  const box = z ? M.bboxOf({ features: [z] }) : focusBox();
+  return loads.run("flow:" + JSON.stringify(initialStart), async signal => {
+    let start = initialStart;
+    if (!start) throw new Error("Choose the huayco start on a highlighted quebrada first.");
+    const path = await api(`/api/terrain/flowpath?lon=${start[0]}&lat=${start[1]}&max_km=6`, { signal });
+    if (path.geometry.coordinates.length < 2) throw new Error("No downhill path can be drawn from this start point.");
+    return { start, path };
+  }, result => {
+    if (state.huaycoStart === initialStart) { state.huaycoStart = result.start; state.flowPath = result.path; }
+  }).then(result => result && result.path);
+}
+
+export async function showView(view, st, { record = false } = {}) {
+  const sequence = ++viewSequence;
+  const current = () => sequence === viewSequence;
+  const speciesById = Object.fromEntries(state.scenario.species.map((s) => [s.species_id, s]));
+  state.twinView = view;
+  if (window.raiz.renderLegend) window.raiz.renderLegend();
+  disposeTimeline(); // one render loop at a time: a new view replaces the previous timeline
+  T.clearAll();
+  M.setData("future", null); M.setData("nodes", null);
+  if (!state.terrain3d) window.raiz.toggle3d(true);
+  const run = async () => {
+    if (view === "before" || view === "after") {
+      const bounds = state.scene.frame.bbox_lonlat || M.bboxOf({ features: plannedZones() });
+      if (bounds) M.fitBounds(bounds, 70, false);
+      M.getMap().jumpTo({ pitch: 60 });
+    }
+    if (view === "before") {
+      st.set("Loading observed ponding…");
+      const p = await ensurePonding();
+      if (!current()) return;
+      T.setWater(p ? { type: "FeatureCollection", features: p.features } : null);
+      if (p && p.nisar) st.set(`NISAR-observed surface water on ${p.date}: ${p.features.length} water bodies (new and persistent classes; 20 m radar grid). Water thickness in 3D is illustrative.`, "ok");
+      else st.set(p && p.water ? `Observed surface water and ponding on ${p.date}: ${p.features.length} water bodies (cloud ${Math.round(p.cloud_fraction * 100)}% of the area, unknown).${p.tiles_failed ? ` ${p.tiles_failed} image tile(s) did not load: those parts are unknown.` : ""}${freshness(p)}`
+        : "No surface water observed on the available dates for this area.", "ok");
+      await new Promise((r) => setTimeout(r, record ? 6000 : 0));
+    } else if (view === "after") {
+      // Growth on the timeline: month 0 = seeds, then saplings to the mature form (illustrative curve).
+      startTimeline({ placements: state.scene.placements, speciesById, path: null, zones: [], withTrees: true }, st);
+      st.set(`Plantation growth from seeding (month 0) to ${GROWTH_MONTHS} months; one 3D tree per marker, species shapes from the plan. Growth curve is illustrative.`, "ok");
+    } else {
+      if (!state.huaycoStart || !state.ravine || state.ravine.decision !== "accepted") {
+        st.set("Choose the huayco start on a highlighted quebrada first: the start must be inside a mapped ravine corridor.", "error");
+        return;
+      }
+      st.set("Tracing the quebrada downhill on the DEM…");
+      const path = await ensurePath();
+      if (!current() || !path) return;
+      const withTrees = view === "huayco_trees";
+      const zones = plannedZones();
+      // Same camera framing (path + planted zones) for both views so they are comparable.
+      const b = M.bboxOf({ features: [path, ...zones] });
+      if (b) M.fitBounds(b, 120);
+      T.setPath(path);
+      await new Promise((r) => setTimeout(r, 1300));
+      if (!current()) return;
+      startTimeline({ placements: state.scene.placements, speciesById, path, zones, withTrees }, st, (s) => {
+        if (s.eventProg >= 1) st.set(withTrees
+          ? (s.hit >= 0 ? `After ${s.months} months of growth the front reaches the planted zone and stops within about ${T.ASSUMED_STOP_CELLS * 30} m (illustrative assumption, not a modeled effect).`
+            : "The downhill path does not cross a planted zone, so the trees do not meet the flow here.")
+          : `Without trees the front runs the whole ${Math.round(path.properties.length_m)} m path (${path.properties.drop_m} m drop) and spreads at the bottom.`, "ok");
+      });
+    }
+  };
+  if (!record) { try { return await run(); } catch (error) { if (current()) st.set(error.message, "error"); return; } }
+  st.set("Recording video…");
+  let url;
+  const label = (state.scene.inference.mode === "fixture" ? "FIXTURE — " : "Illustrative — ") + view.replaceAll("_", " ");
+  try {
+    if (view === "before") url = await T.recordVideo(run, 30, label);
+    else {
+      await run();
+      if (!timeline) throw new Error("The timeline could not start for this view.");
+      timeline.pause();
+      st.set("Exporting the timeline frame by frame…");
+      url = await T.recordTimeline(timeline, { fps: 12, label, caption: (s) => `plantation ${s.months} months` + (s.eventProg > 0 ? ` · huayco ${Math.round(s.eventProg * 100)}%` : "") });
+    }
+  }
+  catch (error) { mark("video.failed", error.message + " " + JSON.stringify(T.recordingStats)); st.set(error.message, "error"); return; }
+  mark("video.ready", JSON.stringify(T.recordingStats));
+  const a = document.createElement("a");
+  a.href = url; a.download = `raiz-${view}.webm`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  st.set("Video saved (WebM).", "ok");
+}
+
+/** Camera AR with the real place: map snapshot draped on the DEM, observed ponding, huayco path, species shapes. */
+export async function openAR() {
+  const s = state.scene;
+  if (!s) return;
+  const extras = { species: (state.scenario && state.scenario.species) || [], ponding: state.ponding || null, path: state.flowPath || null };
+  try {
+    // Bounded wait: the AR must start even if the map never settles (slow tiles, software WebGL).
+    if (s.frame.bbox_lonlat) extras.texture = await Promise.race([M.snapshot(s.frame.bbox_lonlat, 1024, s.frame.target_aspect),
+      new Promise((r) => setTimeout(() => r(null), 8000))]);
+    mark("ar.snapshot", extras.texture ? "ok" : "timeout");
+  } catch (e) { toast("The map snapshot for AR failed; the relief is shown without it."); }
+  return startAR(s, extras);
+}
+
+/** Huayco start: the API decides (accepted / rejected / insufficient); eligible natural corridors are highlighted. */
+function chooseRavineStart(st) {
+  st.set("Click on a highlighted quebrada where the huayco starts.");
+  const z = plannedZones()[0] || (state.dataset && state.dataset.sectors.features[0]);
+  if (z) {
+    const b = M.bboxOf({ features: [z] });
+    api(`/api/terrain/ravine?lon=${(b[0] + b[2]) / 2}&lat=${(b[1] + b[3]) / 2}`).then((r) => M.setCorridors(r.eligible_corridors)).catch(() => {});
+  }
+  M.getMap().once("click", async (e) => {
+    const lon = e.lngLat.lng, lat = e.lngLat.lat;
+    st.set("Checking the point against mapped ravines and the DEM…");
+    try {
+      const r = await api(`/api/terrain/ravine?lon=${lon}&lat=${lat}`);
+      state.ravine = r;
+      M.setCorridors(r.eligible_corridors);
+      if (r.decision === "accepted") {
+        state.huaycoStart = [lon, lat]; state.flowPath = null; viewSequence += 1;
+        const c = r.catchment || {};
+        const area = c.basin_area_km2 ?? c.basin_area_km2_lower_bound;
+        st.set(`${r.message} ${r.corridor && r.corridor.name ? r.corridor.name + ". " : ""}Upslope basin ${area} km²`
+          + (c.melton_ratio !== null && c.melton_ratio !== undefined ? `, Melton ratio ${c.melton_ratio} (${c.class.replaceAll("_", " ")}, Wilford et al. 2004).` : ". Melton ratio not computed (basin beyond the analysis window)."), "ok");
+      } else {
+        state.huaycoStart = null; state.flowPath = null;
+        st.set(`${r.message} ${r.reason}`, "error");
+      }
+    } catch (err) { st.set(err.message, "error"); }
+  });
+}
+
+/** DEM hydrology per zone: wetness index, closed depressions (ponding potential) and upslope area. */
+function hydrologyBlock() {
+  const box = el("div", { class: "block" }, el("h2", {}, "Terrain hydrology ", badge("derived")));
+  const feats = state.dataset ? state.dataset.sectors.features.filter((f) => !f.properties.exclusion_reason) : [];
+  state.hydro = state.hydro || {};
+  for (const f of feats) {
+    const sid = f.properties.sector_id;
+    const h = state.hydro[sid];
+    if (h === undefined) {
+      state.hydro[sid] = null;
+      post("/api/zones/hydrology", { geometry: f.geometry }).then((r) => { state.hydro[sid] = r; rerender(); })
+        .catch((e) => { state.hydro[sid] = { error: e.message }; rerender(); });
+    }
+    if (!h) { box.append(el("p", { class: "note" }, `${f.properties.sector_name}: computing…`)); continue; }
+    if (h.error) { box.append(el("p", { class: "errline" }, `${f.properties.sector_name}: ${h.error}`)); continue; }
+    const d = h.depressions;
+    box.append(el("p", {}, el("strong", {}, f.properties.sector_name), `: wetness index (TWI) median ${h.twi.median}, p90 ${h.twi.p90}; `
+      + `closed depressions ${d.area_ha} ha, deepest ${d.max_depth_m} m${d.within_dem_uncertainty ? " (within the DEM vertical uncertainty of 4 m)" : ""}, `
+      + `${d.stored_volume_m3} m³ fill volume; largest upslope area ${h.max_upslope_area_km2} km².`));
+  }
+  box.append(el("p", { class: "note" }, "Copernicus DEM GLO-30 (surface model). TWI = ln(a/tan slope), Beven and Kirkby (1979), relative; depressions by priority-flood, Barnes et al. (2014)."));
+  return box;
+}
+
+/** Start (or replace) the shared timeline and drive the controls from its clock. */
+function startTimeline(opts, st, onState) {
+  disposeTimeline();
+  timeline = createTimeline(opts);
+  timeline.onTick((s) => { updateTimelineUI(s); if (onState) onState(s); });
+  timeline.seek(0);
+  timeline.play();
+}
+
+function updateTimelineUI(s) {
+  const r = document.getElementById("tl-range"), lab = document.getElementById("tl-label"), pb = document.getElementById("tl-play");
+  if (r) r.value = String(s.t);
+  if (lab) lab.textContent = `Plantation age ${s.months} months` + (s.eventProg > 0 ? ` · huayco ${Math.round(s.eventProg * 100)}%` : "") + ` · ${s.t.toFixed(1)} / ${s.total.toFixed(1)} s`;
+  if (pb && timeline) pb.textContent = timeline.playing ? "Pause" : "Play";
+  if (r && timeline) r.max = String(timeline.total);
+}
+
+function timelineControls() {
+  const range = el("input", { id: "tl-range", type: "range", min: "0", max: String(timeline ? timeline.total : 20), step: "0.05", value: String(timeline ? timeline.time : 0), "aria-label": "Timeline position" });
+  range.addEventListener("input", () => { if (!timeline) return; timeline.pause(); timeline.seek(Number(range.value)); });
+  const play = el("button", { id: "tl-play", class: "btn", type: "button", onclick: () => { if (!timeline) return; timeline.playing ? timeline.pause() : timeline.play(); updateTimelineUI(timeline.stateAt(timeline.time)); } }, "Play");
+  const restart = el("button", { class: "btn", type: "button", onclick: () => timeline && timeline.restart() }, "Restart");
+  const speed = el("select", { "aria-label": "Playback speed" }, ...[0.5, 1, 2, 4].map((v) => el("option", { value: String(v), selected: v === 1 }, `${v}×`)));
+  speed.addEventListener("change", () => timeline && timeline.setSpeed(Number(speed.value)));
+  return el("div", { class: "timeline" }, el("div", { class: "row" }, play, restart, speed), range, el("p", { id: "tl-label", class: "note", "aria-live": "polite" }, "Open a growth or huayco view to start the timeline."));
+}
+
+function twinViews() {
+  const st = statusLine();
+  // Each view loads only its own evidence when opened.
+  const seg = el("div", { class: "seg wrap", role: "group", "aria-label": "3D view" });
+  for (const [k, t] of VIEWS) {
+    const b = el("button", { type: "button", "aria-pressed": String(state.twinView === k) }, t);
+    b.addEventListener("click", () => { [...seg.children].forEach((x) => x.setAttribute("aria-pressed", String(x === b))); showView(k, st); });
+    seg.append(b);
+  }
+  const startBtn = el("button", { class: "btn", type: "button", title: "Click a highlighted quebrada where the huayco starts", onclick: () => chooseRavineStart(st) }, "Choose the huayco start");
+  return el("div", { class: "block" }, el("h2", {}, "Before and after in 3D ", badge("illustrative")),
+    el("p", { class: "note" }, "Ponding comes from NISAR radar water evidence (OPERA DSWx-HLS optical only when no NISAR result exists). Trees are 3D models of the planned species. The huayco starts only on an accepted mapped ravine and follows the real downhill path of the terrain; how far the flow goes is illustrative, not a debris-flow model."),
+    seg,
+    timelineControls(),
+    el("div", { class: "row" }, startBtn,
+      el("button", { class: "btn", type: "button", onclick: () => showView(state.twinView || "huayco_none", st, { record: true }) }, "Record this view as video")),
+    st);
 }
 
 async function generateScene(st) {

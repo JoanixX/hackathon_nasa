@@ -41,10 +41,33 @@ def _prop_value(props: dict[str, Any], key: str) -> float | None:
     return float(v) if isinstance(v, (int, float)) and math.isfinite(v) else None
 
 
+# A zone counts as observed by NISAR when at least half of its pixels had a valid sample on the event and baseline.
+MIN_NISAR_VALID_COVERAGE = 0.5
+
+
+def _nisar_reasons(sid: str, nisar: dict[str, Any]) -> tuple[str, list[str]]:
+    """(status, reasons) from the NISAR evidence for one zone: eligible only with observed temporary water."""
+    z = nisar["zones"].get(sid)
+    ev = nisar["event_date"]
+    if z is None:
+        return "field_assessment_required", ["No NISAR evidence for this zone in the referenced run."]
+    cov = z.get("valid_coverage") or 0.0
+    if cov < MIN_NISAR_VALID_COVERAGE:
+        return "field_assessment_required", [f"NISAR observed only {cov:.0%} of the zone on {ev}: unknown, needs field review."]
+    a = z["areas_ha"]
+    if a["new_water"] > 0:
+        return "eligible", [f"NISAR observed {a['new_water']:g} ha of new surface water on {ev} (vs. dry baseline); "
+                            "temporary ponding site candidate. Field assessment still required."]
+    if a["persistent_low_backscatter"] > 0:
+        return "field_assessment_required", [f"Only persistent low backscatter ({a['persistent_low_backscatter']:g} ha): open water or a smooth dry surface."]
+    return "field_assessment_required", [f"No NISAR-observed ponding in this zone on {ev}."]
+
+
 def evaluate_eligibility(
     features: list[dict[str, Any]],
     allowed_species: set[str],
     request: PlanRequest,
+    nisar: dict[str, Any] | None = None,
 ) -> list[SectorEligibility]:
     out: list[SectorEligibility] = []
     selected = set(request.selected_sector_ids) if request.selected_sector_ids is not None else None
@@ -74,11 +97,17 @@ def evaluate_eligibility(
             reasons.append("No candidate species assigned.")
         elif species not in allowed_species:
             reasons.append(f"Species '{species}' is not an allowed candidate for this scenario.")
+        if request.evidence_mode == "nisar":
+            status, nr = _nisar_reasons(sid, nisar or {"zones": {}, "event_date": "?"})
+            if status != "eligible":
+                reasons.extend(nr)
+        else:
+            nr = ["Manual planning mode: not informed by NISAR evidence."]
         if reasons:
             out.append(SectorEligibility(sector_id=sid, status="field_assessment_required", reasons=reasons))
         else:
-            out.append(SectorEligibility(sector_id=sid, status="eligible",
-                                         reasons=["Candidate planting sector; field assessment still required."]))
+            out.append(SectorEligibility(sector_id=sid, status="eligible", reasons=nr if request.evidence_mode == "nisar" else
+                                         ["Candidate planting sector; field assessment still required."] + nr))
     return out
 
 

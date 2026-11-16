@@ -117,28 +117,29 @@ _SCENARIOS: dict[str, dict[str, Any]] = {
         ],
     },
     "lower-piura-sechura": {
-        # Piura department only (owner decision 2026-11-15): exact OSM boundary, relation 1986151; box = its bounds.
-        "region_bbox": [-81.33, -6.38, -79.21, -4.07],
-        "region_boundary": "piura_department",
+        # Navigation envelope only. Work is restricted to the individual screening windows below.
+        "region_bbox": [-79.64, -5.425, -79.435, -5.22],
         "primary": True,
         "listed": True,
-        # Priority areas named by the owner; coordinates are town centres (map navigation only).
+        # Small residential / mountain-interface locators, not official hazard or cadastral polygons.
+        # IGP El Faique (2021), INGEMMET Canchaque A7567 and Piura critical-zones A7462.
         "focus_areas": [
-            {"name": "Piura", "lon": -80.632, "lat": -5.195, "zoom": 13},
-            {"name": "Sullana", "lon": -80.685, "lat": -4.903, "zoom": 13},
-            {"name": "Paita", "lon": -81.114, "lat": -5.089, "zoom": 13.5},
-            {"name": "Talara", "lon": -81.272, "lat": -4.578, "zoom": 13.5},
-            {"name": "Sechura", "lon": -80.822, "lat": -5.557, "zoom": 13},
-            # Andean Piura (Huancabamba): where the department's high mountains and steep quebradas are.
-            {"name": "Huancabamba (Andes)", "lon": -79.451, "lat": -5.238, "zoom": 11.5},
+            {"name": "Canchaque interfaces", "lon": -79.605, "lat": -5.375, "zoom": 14,
+             "bounds": [-79.62, -5.39, -79.59, -5.36]},
+            {"name": "El Faique interfaces", "lon": -79.61, "lat": -5.405, "zoom": 14,
+             "bounds": [-79.625, -5.42, -79.595, -5.39]},
+            {"name": "Huancabamba interfaces", "lon": -79.45, "lat": -5.24, "zoom": 14,
+             "bounds": [-79.465, -5.255, -79.435, -5.225]},
         ],
-        "name": "Piura",
-        "locator": (-5.52, -80.65),
+        "name": "Piura residential–ravine interfaces",
+        "locator": (-5.375, -79.605),
         "metric_crs": "EPSG:32717",
-        "intervention_case": "Dry-forest establishment comparison on low-relief terrain",
+        "intervention_case": "Residential–ravine and mountain-interface screening in selected Piura localities",
         "hazard_mechanism_note": (
-            "Low-relief dry-forest restoration under different hydrology. This is not equivalent to hillside "
-            "root reinforcement against huaicos; flooding, salinity and tenure need field assessment."
+            "Small screening windows around settlements and adjacent ravines or mountain slopes; these boxes "
+            "are not official risk boundaries. Verify residential adjacency, active channels, slope stability, "
+            "tenure and local species suitability on site. Dry-forest candidates may be unsuitable at Andean elevations. "
+            "Planting alone cannot control channelized debris flows or provide immediate root reinforcement."
         ),
         "sectors": [
             ("01", "Dry-forest terrace A", -700, 300, 320, 220, 5, 2.0, None, "algarrobo"),
@@ -207,7 +208,7 @@ def _build(scenario_id: str) -> dict[str, Any]:
     fc = {"type": "FeatureCollection", "features": features}
     lat, lon = spec["locator"]
     species = [s.model_dump(mode="json") for s in SPECIES if scenario_id in s.scenarios]
-    version = content_hash({"fc": fc, "species": species, "crs": spec["metric_crs"]})
+    version = content_hash({"fc": fc, "species": species, "crs": spec["metric_crs"], "scope": spec["focus_areas"]})
     summary = StudyAreaSummary(
         scenario_id=scenario_id,
         name=spec["name"],
@@ -237,6 +238,15 @@ def get_scenario(scenario_id: str) -> dict[str, Any]:
     if scenario_id not in _SCENARIOS:
         raise KeyError(scenario_id)
     return _build(scenario_id)
+
+
+@lru_cache(maxsize=4)
+def screening_scope(scenario_id: str):
+    """Union of explicit screening windows, or None for historical unrestricted import contracts."""
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+    windows = [f["bounds"] for f in get_scenario(scenario_id)["summary"].get("focus_areas", []) if f.get("bounds")]
+    return unary_union([box(*b) for b in windows]) if windows else None
 
 
 def species_for(scenario_id: str) -> list[SpeciesCandidate]:

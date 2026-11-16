@@ -1,3 +1,4 @@
+import { mark } from "./perf.js";
 // Same-origin API helpers and job polling with stale-response rejection.
 const C = window.RaizCore;
 
@@ -11,7 +12,9 @@ export class ApiError extends Error {
 }
 
 export async function api(path, opts = {}) {
+  const started = performance.now();
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  mark("api.request", path.split("?")[0] + " " + res.status + " " + (res.headers.get("X-Request-ID") || ""), performance.now() - started);
   let body = null;
   try { body = await res.json(); } catch (_) { body = null; }
   if (!res.ok) {
@@ -56,4 +59,43 @@ export async function runJob({ kind, path, body, onStatus, currentPlan, bound = 
   else if (st.state === "partial") onStatus(`Partly done: ${st.error_message || ""}`, "warn");
   else onStatus("Done.", "ok");
   return st;
+}
+
+
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal && signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+  const t = setTimeout(resolve, ms);
+  if (signal) signal.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+});
+
+/**
+ * GET evidence that the server may build in a worker: 200 returns the result; 202 returns a job that is
+ * polled (with backoff, abortable) until it is ready. 503 upstream_busy is retried after Retry-After.
+ */
+export async function evidence(path, { signal, onStatus, timeoutMs = 180000 } = {}) {
+  const t0 = Date.now();
+  let attempt = 0;
+  for (;;) {
+    let body;
+    try {
+      body = await api(path, { signal });
+    } catch (e) {
+      if (e.status === 503 && e.body && e.body.error === "upstream_busy" && Date.now() - t0 < timeoutMs) {
+        if (onStatus) onStatus("Data providers are busy; retrying…");
+        await wait(1000 * Math.min(10, Number(e.retryAfter) || 2), signal);
+        continue;
+      }
+      throw e;
+    }
+    if (!(body && body.job_id && body.state)) return body;
+    let st = body;
+    while (!C.JOB_TERMINAL.has(st.state)) {
+      if (Date.now() - t0 > timeoutMs) throw new ApiError("The evidence job is still running; try again shortly.", 504, st);
+      if (onStatus) onStatus(st.state === "running" ? "Extracting from the imagery…" : "Queued for extraction…");
+      await wait(C.backoffDelay(attempt++), signal);
+      st = await api(`/api/jobs/${encodeURIComponent(st.job_id)}`, { signal });
+    }
+    if (st.state === "ready" && st.result) return st.result;
+    throw new ApiError(st.error_message || "The evidence job failed.", 502, st);
+  }
 }

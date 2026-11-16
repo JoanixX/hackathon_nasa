@@ -19,6 +19,28 @@ from .contracts import BudgetScenario, DepositionNode, DroneParameters, DroneSee
 from .geo import geometry_from_geojson, lonlat_to_metric, metric_to_lonlat, to_metric
 
 MAX_NODES = 1500
+MAX_VISITS = 6000
+
+
+def candidate_grid(bounds, spacing: float, budget: int):
+    """Deterministic, bounded grid. Coarsens display sampling without changing physical coordinates."""
+    if (not isinstance(budget, int) or not 0 <= budget <= MAX_NODES * 4 or
+            not math.isfinite(spacing) or spacing <= 0 or len(bounds) != 4 or
+            not all(math.isfinite(v) for v in bounds)):
+        raise ValueError("Finite grid bounds, positive spacing and a bounded sample budget are required.")
+    minx, miny, maxx, maxy = bounds
+    width, height = maxx - minx, maxy - miny
+    if budget < 1 or width <= 0 or height <= 0:
+        return
+    nx = max(1, math.ceil(width / spacing))
+    ny = max(1, math.ceil(height / spacing))
+    if nx * ny > budget:
+        nx = min(nx, budget, max(1, int(math.sqrt(budget * width / max(height, spacing)))))
+        ny = min(ny, max(1, budget // nx))
+    for row in range(ny):
+        indices = range(nx) if row % 2 == 0 else range(nx - 1, -1, -1)
+        for col in indices:
+            yield minx + (col + .5) * width / nx, miny + (row + .5) * height / ny
 
 UNVERIFIED = [
     "Aviation authorization and local operating rules (not verified).",
@@ -63,38 +85,29 @@ def plan_deposition(
         ex = exclusion_metric(f, metric_crs)
         if ex is not None:
             no_go.append(ex.buffer(SPECIES_MAX_CROWN_RADIUS_M))
-    no_go_union = prep(unary_union(no_go)) if no_go else None
+    no_go_shape = unary_union(no_go) if no_go else None
+    no_go_union = prep(no_go_shape) if no_go_shape is not None else None
 
     spacing = params.node_spacing_m
     raw_nodes: list[tuple[str, float, float]] = []
-    per_sector_capacity: dict[str, int] = {}
+    quota = max(1, MAX_NODES // len(funded))
     for alloc in funded:
         geom = funded_geometry(to_metric(geometry_from_geojson(by_id[alloc.sector_id]["geometry"]), metric_crs),
                                alloc.funded_fraction)
         pg = prep(geom)
-        minx, miny, maxx, maxy = geom.bounds
         pts: list[tuple[float, float]] = []
-        row = 0
-        y = miny + spacing / 2
-        while y < maxy:
-            xs = []
-            x = minx + spacing / 2
-            while x < maxx:
-                xs.append(x)
-                x += spacing
-            if row % 2:
-                xs.reverse()  # boustrophedon ordering inside the sector
-            for x in xs:
-                pt = Point(x, y)
-                if pg.contains(pt) and not (no_go_union and no_go_union.contains(pt)):
-                    pts.append((x, y))
-            y += spacing
-            row += 1
+        target = min(quota, alloc.capsules)
+        for x, y in candidate_grid(geom.bounds, spacing, target * 4):
+            pt = Point(x, y)
+            if pg.contains(pt) and not (no_go_union and no_go_union.covers(pt)):
+                pts.append((x, y))
+        if len(pts) > target:
+            pts = [pts[int(i * len(pts) / target)] for i in range(target)]
         if not pts:
-            c = geom.representative_point()
-            if not (no_go_union and no_go_union.contains(c)):
+            available = geom.difference(no_go_shape) if no_go_shape is not None else geom
+            c = available.representative_point()
+            if not c.is_empty and not (no_go_union and no_go_union.covers(c)):
                 pts = [(c.x, c.y)]
-        per_sector_capacity[alloc.sector_id] = len(pts)
         raw_nodes.extend((alloc.sector_id, x, y) for x, y in pts)
         if len(raw_nodes) > MAX_NODES * 4:
             break
@@ -134,6 +147,10 @@ def plan_deposition(
     # Split a node whose capsules exceed the payload into repeated visits.
     queue: list[tuple[str, float, float, int]] = []
     cap = params.payload_capsules_per_sortie
+    if sum(math.ceil(c / cap) for _, _, _, c in nodes_m) > MAX_VISITS:
+        return DroneSeedingPlan(status="infeasible", purpose=purpose, launch_lat=None, launch_lon=None,
+                                nodes=[], sorties=[], total_capsules=0, unverified_constraints=UNVERIFIED,
+                                infeasibility_reason="The preview exceeds 6,000 deposition visits; split the intervention into phases.", note=note)
     for sid, x, y, c in nodes_m:
         while c > cap:
             queue.append((sid, x, y, cap))
@@ -144,9 +161,10 @@ def plan_deposition(
     nodes: list[DepositionNode] = []
     current: list[tuple[str, float, float, int]] = []
     load = 0
+    route_length = 0.0
 
     def close() -> str | None:
-        nonlocal current, load
+        nonlocal current, load, route_length
         if not current:
             return None
         pts = [(x, y) for _, x, y, _ in current]
@@ -161,7 +179,7 @@ def plan_deposition(
             nodes.append(DepositionNode(node_id=nid, sector_id=sid, lat=lat, lon=lon, capsules=c, sortie=sortie_no, order=i + 1))
             ids.append(nid)
         sorties.append(DroneSortie(sortie=sortie_no, capsules=load, route_m=round(length, 1), node_ids=ids))
-        current, load = [], 0
+        current, load, route_length = [], 0, 0.0
         return None
 
     for item in queue:
@@ -172,14 +190,23 @@ def plan_deposition(
                                     sorties=[], total_capsules=0, unverified_constraints=UNVERIFIED,
                                     infeasibility_reason="A deposition node is beyond the round-trip route limit from the launch point.",
                                     note=note)
-        trial = [(x2, y2) for _, x2, y2, _ in current] + [(x, y)]
-        if current and (load + c > cap or _route_length(trial, launch) > params.max_route_m_per_sortie):
+        last = (current[-1][1], current[-1][2]) if current else launch
+        trial_length = route_length + math.dist(last, (x, y)) + math.dist((x, y), launch) - math.dist(last, launch)
+        if current and (load + c > cap or trial_length > params.max_route_m_per_sortie):
             err = close()
             if err:
-                break
+                return DroneSeedingPlan(status="infeasible", purpose=purpose, launch_lat=None, launch_lon=None,
+                                        nodes=[], sorties=[], total_capsules=0, unverified_constraints=UNVERIFIED,
+                                        infeasibility_reason=err, note=note)
+            trial_length = single
         current.append(item)
         load += c
-    close()
+        route_length = trial_length
+    err = close()
+    if err:
+        return DroneSeedingPlan(status="infeasible", purpose=purpose, launch_lat=None, launch_lon=None,
+                                nodes=[], sorties=[], total_capsules=0, unverified_constraints=UNVERIFIED,
+                                infeasibility_reason=err, note=note)
 
     lon, lat = metric_to_lonlat(launch[0], launch[1], metric_crs)
     return DroneSeedingPlan(

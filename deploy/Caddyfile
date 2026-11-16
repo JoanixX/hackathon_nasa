@@ -1,0 +1,19 @@
+# HTTPS for ayumi.earth (certificates from Let's Encrypt, renewed automatically by Caddy).
+www.ayumi.earth {
+	encode zstd gzip
+	# NISAR evidence, terrain and building tiles can take tens of seconds on a cold cache.
+	reverse_proxy api:8000 {
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
+
+ayumi.earth {
+	redir https://www.ayumi.earth{uri} permanent
+}

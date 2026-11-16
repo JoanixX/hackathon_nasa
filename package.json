@@ -7,12 +7,13 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "test:props": "node --test tests/js/core.property.test.mjs",
+    "test:props": "node --test tests/js/core.property.test.mjs tests/js/loading.property.test.mjs tests/js/map_loading.property.test.mjs tests/js/twin_playback.property.test.mjs tests/js/charts.property.test.mjs",
     "test:e2e": "playwright test --config tests/js/playwright.config.mjs",
-    "ar:target": "node tools/build_ar_target.mjs"
+    "ar:target": "node tools/build_ar_target.mjs",
+    "test:perf": "node tests/js/perf_session.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.65.1",
-    "fast-check": "4.10.2"
+    "@playwright/test": "1.64.1",
+    "fast-check": "4.8.0"
   }
 }

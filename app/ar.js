@@ -54,8 +54,17 @@ function register() {
         for (let i = 0; i < pos.count; i++) pos.setZ(i, this.h(pos.getX(i), pos.getY(i)));
         geo.computeVertexNormals();
       }
-      this.terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xc9b48f, transparent: true, opacity: 0.9 }));
+      // The real place: a snapshot of the map (streets, buildings, quebradas, colours) draped on the DEM.
+      const X = window.__raizExtras || {};
+      const terrainMat = X.texture
+        ? new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(X.texture) })
+        : new THREE.MeshLambertMaterial({ color: 0xc9b48f, transparent: true, opacity: 0.9 });
+      this.terrain = new THREE.Mesh(geo, terrainMat);
       this.group.add(this.terrain);
+      this.toAR = makeProjector(s.frame);
+      this.buildWater(X.ponding);
+      this.mudGroup = new THREE.Group(); this.group.add(this.mudGroup);
+      this.path = X.path || null;
       // The evidence image is draped only over its own registered bounds, never stretched to the target.
       this.evidenceMesh = null;
       if (s.evidence_overlay) {
@@ -81,13 +90,20 @@ function register() {
       dep.count = s.deposition_points.length; this.dep = dep;
       const n = Math.max(1, s.placements.length);
       const trunk = new THREE.CylinderGeometry(0.15, 0.2, 1, 6); trunk.rotateX(Math.PI / 2); trunk.translate(0, 0, 0.5);
-      const canopy = new THREE.ConeGeometry(1, 1, 7); canopy.rotateX(Math.PI / 2); canopy.translate(0, 0, 0.5);
       const root = new THREE.ConeGeometry(1, 1, 6); root.rotateX(-Math.PI / 2); root.translate(0, 0, -0.5);
-      this.trunks = new THREE.InstancedMesh(trunk, new THREE.MeshBasicMaterial({ color: 0x7a5230 }), n);
-      this.canopies = new THREE.InstancedMesh(canopy, new THREE.MeshLambertMaterial({ color: 0x4f8a3a }), n);
+      // Crown shapes per species model: broad-flat (algarrobo), rounded (sapote), umbrella (faique), cone (others).
+      const crowns = {
+        broad_flat: (() => { const g = new THREE.CylinderGeometry(1, 0.8, 1, 12); g.rotateX(Math.PI / 2); g.translate(0, 0, 0.5); return g; })(),
+        rounded: (() => { const g = new THREE.SphereGeometry(0.5, 12, 8); g.translate(0, 0, 0.5); return g; })(),
+        umbrella: (() => { const g = new THREE.CylinderGeometry(1, 0.95, 0.25, 14); g.rotateX(Math.PI / 2); g.translate(0, 0, 0.88); return g; })(),
+        cone: (() => { const g = new THREE.ConeGeometry(1, 1, 7); g.rotateX(Math.PI / 2); g.translate(0, 0, 0.5); return g; })(),
+      };
+      this.trunks = new THREE.InstancedMesh(trunk, new THREE.MeshLambertMaterial({ color: 0x6b4a2b }), n);
+      this.crowns = Object.fromEntries(Object.entries(crowns).map(([k, g]) => [k, new THREE.InstancedMesh(g, new THREE.MeshLambertMaterial({ color: 0xffffff }), n)]));
       this.roots = new THREE.InstancedMesh(root, new THREE.MeshBasicMaterial({ color: 0xa0732f, transparent: true, opacity: 0.45 }), n);
       this.rootsOn = false;
-      for (const mesh of [this.trunks, this.canopies, this.roots, dep]) { mesh.frustumCulled = false; this.group.add(mesh); }
+      this.species = Object.fromEntries((X.species || []).map((sp) => [sp.species_id, sp.model || {}]));
+      for (const mesh of [this.trunks, this.roots, dep, ...Object.values(this.crowns)]) { mesh.frustumCulled = false; this.group.add(mesh); }
       for (const old of this.el.querySelectorAll(".raiz-zone")) old.remove();
       s.zones.forEach((z, i) => { const e = document.createElement("a-entity"); e.setAttribute("class", "raiz-zone clickable"); e.setAttribute("raiz-zone", `index: ${i}`); this.el.appendChild(e); });
       this.apply();
@@ -99,23 +115,72 @@ function register() {
       // Symbolic marker width (not to scale): readable markers that grow with the canopy stage.
       const r = 0.0018 + 0.0035 * Math.min(1, st.canopy_radius_m / 1.5);
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color();
+      const counts = { broad_flat: 0, rounded: 0, umbrella: 0, cone: 0 };
       vis.forEach((p, i) => {
-        const z0 = this.h(p.x, p.y) + 0.002, th = h * 0.45;
-        m.compose(new THREE.Vector3(p.x, p.y, z0), q, new THREE.Vector3(r * 0.6, r * 0.6, Math.max(th, 1e-4))); this.trunks.setMatrixAt(i, m);
-        m.compose(new THREE.Vector3(p.x, p.y, z0 + th), q, new THREE.Vector3(r, r, Math.max(h - th, 1e-4))); this.canopies.setMatrixAt(i, m);
-        col.setHex(colors[p.asset_id] || 0x4f8a3a); this.canopies.setColorAt(i, col);
-        m.compose(new THREE.Vector3(p.x, p.y, z0), q, new THREE.Vector3(r * 0.7, r * 0.7, Math.max(h * 0.6, 1e-4))); this.roots.setMatrixAt(i, m);
+        const model = this.species[p.species_id] || {};
+        const shape = counts[model.crown_shape] !== undefined ? model.crown_shape : "cone";
+        const tr = model.trunk_ratio || 0.45;
+        const rr = r * ((model.crown_radius_m || 3) / 3);
+        const z0 = this.h(p.x, p.y) + 0.002, th = h * tr;
+        m.compose(new THREE.Vector3(p.x, p.y, z0), q, new THREE.Vector3(rr * 0.35, rr * 0.35, Math.max(th, 1e-4))); this.trunks.setMatrixAt(i, m);
+        const k = counts[shape]++;
+        m.compose(new THREE.Vector3(p.x, p.y, z0 + th * 0.6), q, new THREE.Vector3(rr, rr, Math.max(h - th * 0.6, 1e-4)));
+        this.crowns[shape].setMatrixAt(k, m);
+        col.set(model.crown_color || "#4f8a3a"); this.crowns[shape].setColorAt(k, col);
+        m.compose(new THREE.Vector3(p.x, p.y, z0), q, new THREE.Vector3(rr * 0.7, rr * 0.7, Math.max(h * 0.6, 1e-4))); this.roots.setMatrixAt(i, m);
       });
-      this.trunks.count = this.canopies.count = vis.length;
+      this.trunks.count = vis.length;
+      for (const [k, mesh] of Object.entries(this.crowns)) { mesh.count = counts[k]; mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true; }
       this.roots.count = this.rootsOn && st.horizon_months >= 6 ? vis.length : 0;
-      for (const mesh of [this.trunks, this.canopies, this.roots]) mesh.instanceMatrix.needsUpdate = true;
-      if (this.canopies.instanceColor) this.canopies.instanceColor.needsUpdate = true;
+      for (const mesh of [this.trunks, this.roots]) mesh.instanceMatrix.needsUpdate = true;
       this.dep.visible = this.stageIndex === 0;
       if (this.evidenceMesh) this.evidenceMesh.visible = this.evidence;
       $("ar-caption").textContent = `${st.horizon_months === 0 ? "Seed deposition" : `${st.horizon_months} months`}: ${st.caption} (${vis.length} markers${this.rootsOn && st.horizon_months >= 6 ? "; " + s.labels.roots : ""})`;
       document.querySelectorAll("[data-ar-h]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.arH) === this.stageIndex)));
       document.body.dataset.arStage = String(this.stageIndex);
       document.body.dataset.arVisible = String(vis.length);
+    },
+    buildWater(ponding) {
+      if (!ponding || !ponding.features || !this.toAR) return;
+      const mat = new THREE.MeshBasicMaterial({ color: 0x2f7fd8, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+      for (const f of ponding.features.slice(0, 250)) {
+        const ring = f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates[0][0];
+        const pts = ring.map(([lo, la]) => this.toAR(lo, la));
+        if (pts.some(([x, y]) => Math.abs(x) > 0.5 || Math.abs(y) > s_aspect(this.spec) / 2)) continue;
+        const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+        const [cx, cy] = pts[0];
+        const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), mat);
+        mesh.position.z = this.h(cx, cy) + 0.003;
+        this.group.add(mesh);
+      }
+    },
+    playHuayco(withTrees) {
+      if (!this.path || !this.toAR) { $("ar-caption").textContent = "Open the huayco view on the map first so the downhill path is known."; return; }
+      while (this.mudGroup.children.length) this.mudGroup.remove(this.mudGroup.children[0]);
+      const pts = this.path.geometry.coordinates.map(([lo, la]) => this.toAR(lo, la));
+      const zones = withTrees ? this.spec.zones.filter((z) => z.species_id) : [];
+      const inside = ([x, y]) => zones.some((z) => { let c = false; const o = z.outline; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { if ((o[i][1] > y) !== (o[j][1] > y) && x < ((o[j][0] - o[i][0]) * (y - o[i][1])) / (o[j][1] - o[i][1]) + o[i][0]) c = !c; } return c; });
+      let stopAt = pts.length - 1;
+      if (withTrees) { const hit = pts.findIndex(inside); if (hit >= 0) stopAt = Math.min(pts.length - 1, hit + 8); }
+      const mat = new THREE.MeshLambertMaterial({ color: 0x7b5a3a });
+      const geo = new THREE.CylinderGeometry(1, 1, 1, 10); geo.rotateX(Math.PI / 2);
+      const mud = new THREE.InstancedMesh(geo, mat, pts.length + 1); mud.frustumCulled = false; mud.count = 0;
+      this.mudGroup.add(mud);
+      const t0 = performance.now(), dur = 9000, m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+      const step = (now) => {
+        const prog = Math.min(1, (now - t0) / dur);
+        const idx = Math.round(prog * stopAt);
+        for (let i = 0; i <= idx; i++) {
+          const [x, y] = pts[i];
+          let rad = 0.004 + 0.01 * (i / pts.length);
+          if (withTrees && inside(pts[i])) rad *= 0.5;
+          m4.compose(new THREE.Vector3(x, y, this.h(x, y) + 0.002), q, new THREE.Vector3(rad, rad, 0.004)); mud.setMatrixAt(i, m4);
+        }
+        mud.count = idx + 1; mud.instanceMatrix.needsUpdate = true;
+        if (prog < 1) requestAnimationFrame(step);
+        else $("ar-caption").textContent = withTrees ? "Huayco with the trees: the front stops inside the planted zone (illustrative assumption)." : "Huayco without the trees: the front runs the whole downhill path.";
+      };
+      requestAnimationFrame(step);
     },
     setStage(i) { this.stageIndex = Math.max(0, Math.min(3, i)); this.apply(); },
     setRoots(on) { this.rootsOn = on; this.apply(); },
@@ -137,6 +202,15 @@ function register() {
   });
 }
 
+function s_aspect(spec) { return spec.frame.target_aspect; }
+
+/** Lon/lat -> tabletop coordinates through the frame footprint (linear; the area is a few km wide). */
+function makeProjector(frame) {
+  const b = frame.bbox_lonlat;
+  if (!b) return null;
+  return (lon, lat) => [((lon - b[0]) / (b[2] - b[0])) - 0.5, ((lat - b[1]) / (b[3] - b[1])) * frame.target_aspect - frame.target_aspect / 2];
+}
+
 function comp() { const e = document.querySelector("[raiz-scene]"); return e && e.components["raiz-scene"]; }
 
 export function wireHud() {
@@ -144,6 +218,7 @@ export function wireHud() {
   $("btn-ar-roots").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = comp(); if (c) c.setRoots(on); });
   $("btn-ar-evidence").addEventListener("click", (ev) => { const on = ev.currentTarget.getAttribute("aria-pressed") !== "true"; ev.currentTarget.setAttribute("aria-pressed", String(on)); const c = comp(); if (c) c.setEvidence(on); });
   $("btn-ar-exit").addEventListener("click", () => event("end"));
+  document.querySelectorAll("[data-ar-huayco]").forEach((b) => b.addEventListener("click", () => { const c = comp(); if (c) c.playHuayco(b.dataset.arHuayco === "trees"); }));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("ar-overlay").hidden) event("end"); });
 }
 
@@ -155,8 +230,9 @@ function teardown() {
   arState = "idle"; document.body.dataset.arState = "idle";
 }
 
-export async function startAR(scene) {
+export async function startAR(scene, extras = {}) {
   window.__raizScene = scene;
+  window.__raizExtras = extras;
   $("ar-overlay").hidden = false;
   $("ar-labels").textContent = [scene.labels.future, scene.labels.scale, scene.labels.marker, scene.frame.terrain,
     scene.evidence_overlay ? scene.evidence_overlay.label : ""].filter(Boolean).join(". ");

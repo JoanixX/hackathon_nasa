@@ -1,10 +1,12 @@
 # RAÍZ-SAR AI
 
+Piura territorial 3D extension: select **3D territory** for regional/Andean navigation, default ×1 DEM relief, mapped materials, source-elevation inspection and bounded illustrative vegetation/water/weather. See the [implementation, sources and measured limitations](docs/PIURA_DIGITAL_TWIN.md) and [ADR 0005](docs/decisions/0005-piura-territorial-view.md). This is a local territorial increment; complete geographic reconstruction and hardware performance are not certified.
+
 ### SAR-informed planting assessment, slope bioengineering and AI-assisted AR scenarios
 
 Current solution for the team's **NASA Space Apps Challenge 2026 / Dancing with the SARs** preparation. Repository: `JoanixX/hackathon_nasa` (private). The project has pivoted from the earlier NiñoRadar flood-exposure concept.
 
-**Status: locally runnable, map-first prototype focused on Piura** ([ADR 0002](docs/decisions/0002-map-first-frontend-and-real-data.md)). The map shows real data from free sources: NISAR GCOV and Sentinel-1 OPERA RTC radar and HLS imagery (NASA GIBS), Copernicus DEM terrain, NASA POWER rainfall and the ASF catalog, over an OpenFreeMap basemap. Users draw and confirm their own zones. Gemini generates the future scenario on the server, shown on 3D terrain and in camera AR. Numeric backscatter needs an Earthdata download, and physical-device AR is still pending. See [implementation status and acceptance gates](docs/IMPLEMENTATION_STATUS.md).
+**Status: locally runnable, map-first prototype focused on Piura and Tumbes** ([ADR 0002](docs/decisions/0002-map-first-frontend-and-real-data.md)). The default view is a coloured street/building map. Analytical layers are Off until selected; terrain, drawing tools and charts load on demand. The map offers real data from free sources: NISAR GCOV and Sentinel-1 OPERA RTC radar and HLS imagery (NASA GIBS), Copernicus DEM terrain, NASA POWER rainfall and the ASF catalog, over an OpenFreeMap basemap. Users draw and confirm their own zones. Gemini generates the future scenario on the server, shown on 3D terrain and in camera AR. Numeric backscatter needs an Earthdata download, and physical-device AR is still pending. See [implementation status and acceptance gates](docs/IMPLEMENTATION_STATUS.md).
 
 ## Run locally
 
@@ -85,7 +87,11 @@ Support environmental/GIS specialists and municipal planners evaluating where lo
 3. A **required interactive geospatial map with AR**.
 4. **Required AI-assisted construction of an interactive future planting scenario in AR**, with assumptions and generated content clearly labeled.
 
-The two scenario locators are Río Seco/Carabayllo in northern Lima and lower Piura/Sechura. Their coordinates are approximate, not verified intervention boundaries. Species are source candidates, not approved prescriptions.
+Satellite and SAR evidence also points to strategic sites where rainwater ponds after the rains: planted with species that need the least irrigation and fertilizer (at most three types), they become candidate planting sites, not only huayco protection slopes ([ADR 0003](docs/decisions/0003-ponding-sites-piura-tumbes-and-twin-views.md)).
+
+The study area is Piura and Tumbes, focused on Piura, Sullana, Paita, Talara and Sechura; the Carabayllo fixture remains for tests only. Users draw zones with 4 to 8 vertices. 3D views show observed ponding (before), planted trees (after) and a huayco descending a quebrada with and without the trees, on the real DEM; they are illustrative, not hazard models. Species are source candidates, not approved prescriptions.
+
+Performance: every API request and job writes its timings to `<runtime>/logs/perf.jsonl` (and a `Server-Timing` header); summarize with `python tools/perf_report.py <path> --since 600`. Open the app with `?perf` to inspect browser phases, per-operation durations and long tasks. Browser session IDs and API request IDs distinguish slow operations from time since navigation. Background bulk warmup is opt-in (`RAIZ_DEM_PREFETCH=1`). External calls share host-wide slots (`RAIZ_UPSTREAM_SLOTS`, default 12; `RAIZ_UPSTREAM_WAIT_S`, default 20) and answer 503 with `Retry-After` when saturated; ponding extraction runs as an `evidence` job in the workers. Video export: `node tests/js/video_export_check.mjs`. See the [measured audit and phased delivery plan](docs/PERFORMANCE_AUDIT.md) and [ADR 0004](docs/decisions/0004-demand-driven-map-loading.md).
 
 ## Architecture
 
@@ -128,3 +134,7 @@ Radar backscatter is not automatically a measurement of buried moisture pockets,
 - Property-based testing is mandatory for executable logic; use bounded fuzzing at malformed-input boundaries.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The code license remains undecided. Respect dataset/library/asset terms and attribution; this is not an official NASA, SERFOR or CENEPRED product.
+
+Browser performance regression: `npm run test:perf`. To inspect the four views without spending model quota, build an explicit fixture with `python tools/build_visual_fixture.py`, then run `node tests/js/visual_layers_check.mjs` against the local server. Video export currently has a reproduced empty-encoder issue in headless Chromium; it is an open gate, with diagnostics and an explicit error instead of an empty-file success. See the audit for the exact verification results.
+
+NISAR's required analytical role and the current integration gap are detailed in [NISAR evidence integration](docs/NISAR_EVIDENCE_INTEGRATION.md): the existing surface-water polygons use optical DSWx-HLS, while the radar overlay and GCOV processing path are separate. Real NISAR-derived water metrics must still be connected to planting assessment and its 3D/AR scene.

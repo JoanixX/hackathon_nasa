@@ -1,4 +1,4 @@
-# Contributing to RAÍZ-SAR AI
+# Contributing to Ayumi
 
 ## Read first
 
@@ -50,3 +50,5 @@ Update local `context/WORKING_STATE.md` and evidence-backed `context/KNOWLEDGE.m
 ## Data and secrets
 
 Do not commit credentials, `.env` files, Earthdata tokens, personal field-team data or large satellite rasters. `data/`, `outputs/`, `artifacts/` and `.local/` are ignored. Record authorized download locations, metadata, checksums and license terms instead. Redistribute samples only with confirmed rights.
+
+Current product baseline: Ayumi; selected Piura residential–ravine interfaces. See [implementation status](docs/IMPLEMENTATION_STATUS.md). Conversations follow the owner preference for Spanish; deliverables remain in English.

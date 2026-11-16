@@ -1,4 +1,6 @@
-# RAÍZ-SAR AI — Sources, overrides and decisions
+# Ayumi — Sources, overrides and decisions
+
+> Current baseline — November 15, 2026 (Lima): **Ayumi** is the locally runnable product. > Work is limited to small residential–ravine/mountain screening windows around Canchaque, El Faique and Huancabamba; the whole Piura department and Tumbes are not offered. > Windows are locators, not official hazard boundaries or planting approvals. See [current implementation status](IMPLEMENTATION_STATUS.md) and [ADR 0006](decisions/0006-ayumi-bounded-workflow-and-municipal-report.md).
 
 ## Source hierarchy
 

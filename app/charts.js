@@ -1,9 +1,13 @@
+import { loadScript } from "./loading.js";
 // Charts that each answer one question, built only when their data exist.
 const charts = new Map();
 const TXT = "#ece3d2", DIM = "#b4ab99", GRID = "rgba(236,227,210,0.08)";
 const reduce = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function make(canvas, cfg) {
+async function make(canvas, cfg) {
+  try { if (!window.Chart) await loadScript("https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"); }
+  catch (error) { canvas.replaceWith(Object.assign(document.createElement("p"), { textContent: error.message })); return; }
+  if (!canvas.isConnected) return;
   if (charts.has(canvas)) charts.get(canvas).destroy();
   const base = { animation: reduce() ? false : { duration: 250 }, responsive: true, maintainAspectRatio: false,
     plugins: { legend: { labels: { color: TXT, boxWidth: 12 } }, tooltip: { mode: "index", intersect: false } } };

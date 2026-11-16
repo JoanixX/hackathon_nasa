@@ -11,6 +11,7 @@ Replay one file:          python tests/fuzz/fuzz_boundaries.py --replay .local/f
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -99,14 +100,14 @@ def mutate_structure(data: bytes, rng: random.Random) -> bytes:
             continue
         op = rng.randrange(4)
         if op == 0:
-            parent[key] = rng.choice(VALUES)
+            parent[key] = copy.deepcopy(rng.choice(VALUES))
         elif op == 1:
             del parent[key]
         elif op == 2 and isinstance(parent, list):
-            parent.insert(key, parent[key])
+            parent.insert(key, copy.deepcopy(parent[key]))
         else:
             v = parent[key]
-            parent[key] = v * rng.choice([-1, 10, 1e6]) if isinstance(v, (int, float)) and not isinstance(v, bool) else rng.choice(VALUES)
+            parent[key] = v * rng.choice([-1, 10, 1e6]) if isinstance(v, (int, float)) and not isinstance(v, bool) else copy.deepcopy(rng.choice(VALUES))
     return json.dumps(doc, allow_nan=True).encode()[:MAX_INPUT]
 
 

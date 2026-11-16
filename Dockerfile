@@ -20,7 +20,7 @@ RUN pip install --root-user-action=ignore --require-hashes -r requirements-linux
 
 RUN useradd --create-home --uid 10001 raiz
 COPY --chown=raiz:raiz . /app
-RUN mkdir -p /app/.local/runtime && chown -R raiz:raiz /app/.local
+RUN mkdir -p /app/.local/runtime /var/raiz && chown -R raiz:raiz /app/.local /var/raiz
 USER raiz
 
 EXPOSE 8000

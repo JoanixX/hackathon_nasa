@@ -15,6 +15,11 @@ class PlanInputError(ValueError):
     pass
 
 
+def plan_identity(request: PlanRequest, dataset: dict[str, Any]) -> str:
+    return content_hash({"request": request.model_dump(mode="json"),
+                         "dataset_version": dataset["summary"]["dataset_version"], "engine": "plan-engine-2"})
+
+
 def resolve_dataset(request: PlanRequest) -> dict[str, Any]:
     """Return the sector dataset (fixture or imported) that the request is versioned against."""
     try:
@@ -32,6 +37,11 @@ def resolve_dataset(request: PlanRequest) -> dict[str, Any]:
         summary["data_mode"] = imported.get("data_mode", "real")
         if content_hash({"sectors": sectors}) != imported.get("content_hash"):
             raise PlanInputError("Imported sector dataset failed its integrity check; import it again.")
+        from shapely.geometry import shape
+        from .scenarios import screening_scope
+        scope = screening_scope(request.scenario_id)
+        if scope is not None and any(not scope.covers(shape(f["geometry"])) for f in sectors["features"]):
+            raise PlanInputError("Imported sectors lie outside the current residential–ravine screening windows; import new boundaries.")
     if summary["dataset_version"] != request.dataset_version:
         raise PlanInputError("Stale dataset version: reload the scenario before planning.")
     return {"summary": summary, "sectors": sectors}
@@ -77,10 +87,8 @@ def build_plan(request: PlanRequest) -> PlantingPlan:
     budget = allocate(features, eligibility, request)
     establishment = establishment_scenarios(request, budget)
     drone = plan_deposition(features, budget, request.drone, ds["summary"]["metric_crs"])
-    version_basis = {"request": request.model_dump(mode="json"), "dataset_version": ds["summary"]["dataset_version"],
-                     "engine": "plan-engine-1"}
     return PlantingPlan(
-        plan_version=content_hash(version_basis),
+        plan_version=plan_identity(request, ds),
         scenario_id=request.scenario_id,
         dataset_version=ds["summary"]["dataset_version"],
         request=request,

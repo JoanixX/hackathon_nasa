@@ -8,11 +8,14 @@ x-app: &app
       required: false
   environment:
     RAIZ_VALKEY_URL: redis://valkey:6379/0
-    RAIZ_RUNTIME_DIR: /app/.local/runtime
+    # Runtime data (SQLite, caches, artifacts, logs) on a native Docker volume: the Windows bind
+    # mount made every cached tile read ~10x slower (perf log, 2026-11-15).
+    RAIZ_RUNTIME_DIR: /var/raiz
     RAIZ_DATA_DIR: /app/data
     RAIZ_AI_PROVIDER: ${RAIZ_AI_PROVIDER:-gemini}
   volumes:
     - ./:/app
+    - raiz-runtime:/var/raiz
   depends_on:
     valkey:
       condition: service_healthy
@@ -33,19 +36,25 @@ services:
 
   api:
     <<: *app
-    command: ["uvicorn", "raiz_sar.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Three processes so slow tile renders never block health, plans or job polling.
+    # Software-rendered browser QA can starve worker startup on the shared Windows/WSL host.
+    # Extend the supervisor margin after repeated child restarts during the terrain audit.
+    command: ["uvicorn", "raiz_sar.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3", "--timeout-worker-healthcheck", "30"]
     ports:
       - "127.0.0.1:${RAIZ_PORT:-8765}:8000"
 
   worker-sar:
     <<: *app
-    command: ["python", "-m", "raiz_sar.worker", "sar"]
+    # Short evidence jobs (ponding extraction) first, then multi-GB SAR processing.
+    command: ["python", "-m", "raiz_sar.worker", "evidence,sar"]
     mem_limit: 2g
 
   worker-ai:
     <<: *app
-    command: ["python", "-m", "raiz_sar.worker", "ai"]
+    # AI scenes/reports first; evidence jobs too, so a long SAR download never blocks them.
+    command: ["python", "-m", "raiz_sar.worker", "ai,evidence"]
     mem_limit: 768m
 
 volumes:
   valkey-data:
+  raiz-runtime:

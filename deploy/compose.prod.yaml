@@ -1,0 +1,79 @@
+# Production stack for https://www.ayumi.earth on one VM (free Oracle Cloud Ampere A1, arm64).
+# Same services as compose.yaml, but: the code is baked into the image (no bind mount), only Caddy is
+# published (ports 80/443, automatic HTTPS), and runtime data lives on named volumes that survive redeploys.
+# Run from the repository root on the VM:  docker compose -f deploy/compose.prod.yaml up -d --build
+name: ayumi
+
+x-app: &app
+  build:
+    context: ..
+  image: ayumi-raiz:prod
+  env_file:
+    - path: ../.env
+      required: true
+  environment:
+    RAIZ_VALKEY_URL: redis://valkey:6379/0
+    RAIZ_RUNTIME_DIR: /var/raiz
+    RAIZ_DATA_DIR: /var/raiz/data
+    RAIZ_AI_PROVIDER: ${RAIZ_AI_PROVIDER:-gemini}
+  volumes:
+    - raiz-runtime:/var/raiz
+  depends_on:
+    valkey:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  valkey:
+    image: valkey/valkey:8.1.11@sha256:8f836008e0986c36adf50da714c7060cf689dbb335f61fe077939d90fa650809
+    command: ["valkey-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: ["uvicorn", "raiz_sar.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3", "--timeout-worker-healthcheck", "30", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  worker-sar:
+    <<: *app
+    command: ["python", "-m", "raiz_sar.worker", "evidence,sar"]
+    mem_limit: 4g
+
+  worker-ai:
+    <<: *app
+    command: ["python", "-m", "raiz_sar.worker", "ai,evidence"]
+    mem_limit: 2g
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  valkey-data:
+  raiz-runtime:
+  caddy-data:
+  caddy-config:

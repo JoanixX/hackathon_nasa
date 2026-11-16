@@ -1,0 +1,23 @@
+{
+  "name": "Piura department (regi\u00f3n Piura)",
+  "source": "OpenStreetMap administrative boundary via Nominatim",
+  "osm_type": "relation",
+  "osm_id": 1986151,
+  "display_name": "Piura, Per\u00fa",
+  "query": "https://nominatim.openstreetmap.org/search?q=Piura&countrycodes=pe&featureType=state&polygon_geojson=1&polygon_threshold=0.0005&format=geojson&limit=1",
+  "retrieved_utc": "2026-11-16T00:32:03+00:00",
+  "licence": "ODbL 1.0, \u00a9 OpenStreetMap contributors",
+  "simplification": "Nominatim polygon_threshold=0.0005 deg (~55 m)",
+  "sha256": "cdbdad4032bf5bb356e9412b05c95b7195a6f95772bdccf4179b4a3d5fcce7c6",
+  "area_km2": 35377.3,
+  "bounds": [
+    -81.3284,
+    -6.37209,
+    -79.21004,
+    -4.07949
+  ],
+  "cross_check": {
+    "dataset": "geoBoundaries gbOpen PER ADM1 (Wikimedia Commons, 2008)",
+    "area_km2": 35916.2
+  }
+}

@@ -48,12 +48,13 @@ def run() -> None:
             if not summary.get("listed", True) and not summary.get("primary"):
                 continue
             with perf.span("warm.dem_cells", scenario=sid):
-                prefetch_region(summary["region_bbox"])
+                for b in [f["bounds"] for f in summary.get("focus_areas", []) if f.get("bounds")] or [summary["region_bbox"]]:
+                    prefetch_region(b)
             for fa in summary.get("focus_areas", []):
                 lon, lat = fa["lon"], fa["lat"]
                 try:
                     with perf.span("warm.acquisitions", area=fa["name"]):
-                        acq = acquisitions((lon - 0.12, lat - 0.12, lon + 0.12, lat + 0.12), "2025-10-01", today)
+                        acq = acquisitions(tuple(fa.get("bounds", (lon - 0.015, lat - 0.015, lon + 0.015, lat + 0.015))), "2025-10-01", today)
                     dates = [d["date"] for d in acq["datasets"]["nisar_gcov"]][-60:]
                     if dates:
                         with perf.span("warm.nisar_coverage", area=fa["name"]):

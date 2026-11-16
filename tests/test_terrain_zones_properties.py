@@ -60,12 +60,12 @@ def test_slope_of_plane_matches_analytic(gx, gy, res):
 
 
 @st.composite
-def star_polygons(draw, lon=-80.62, lat=-5.2, min_n=3, max_n=12):
+def star_polygons(draw, lon=-79.612, lat=-5.375, min_n=3, max_n=12):
     """Simple (star-shaped, sorted by angle) polygons: never self-intersecting."""
     n = draw(st.integers(min_n, max_n))
     angles = sorted(draw(st.lists(st.floats(0, 2 * math.pi - 1e-3), min_size=n, max_size=n, unique=True)))
     assume(all(b - a > 0.05 for a, b in zip(angles, angles[1:])) and (2 * math.pi - angles[-1] + angles[0]) > 0.05)
-    radii = draw(st.lists(st.floats(0.004, 0.02), min_size=n, max_size=n))
+    radii = draw(st.lists(st.floats(0.001, 0.003), min_size=n, max_size=n))
     ring = [[lon + r * math.cos(a), lat + r * math.sin(a)] for a, r in zip(angles, radii)]
     ring.append(ring[0])
     poly = Polygon(ring)
@@ -127,7 +127,7 @@ def test_zone_dataset_invariants(polys, roles):
     # Shift polygons apart so only deliberate overlap tests overlap.
     zones = []
     for i, g in enumerate(polys):
-        ring = [[x + i * 0.1, y] for x, y in g["coordinates"][0]]
+        ring = [[x + i * 0.007, y] for x, y in g["coordinates"][0]]
         zones.append({"name": f"Z {i}", "geometry": {"type": "Polygon", "coordinates": [ring]}, "role": roles[i]})
     out = build_zone_dataset(PIURA, zones, terrain_fn=fake_terrain)
     feats = out["sectors"]["features"]
@@ -164,8 +164,8 @@ def test_imported_zones_keep_their_vertices(geom):
 
 
 def test_overlapping_zones_rejected():
-    a = {"type": "Polygon", "coordinates": [[[-80.63, -5.21], [-80.6, -5.21], [-80.6, -5.18], [-80.63, -5.18], [-80.63, -5.21]]]}
-    b = {"type": "Polygon", "coordinates": [[[-80.61, -5.2], [-80.58, -5.2], [-80.58, -5.17], [-80.61, -5.17], [-80.61, -5.2]]]}
+    a = {"type": "Polygon", "coordinates": [[[-79.615, -5.38], [-79.605, -5.38], [-79.605, -5.37], [-79.615, -5.37], [-79.615, -5.38]]]}
+    b = {"type": "Polygon", "coordinates": [[[-79.61, -5.38], [-79.60, -5.38], [-79.60, -5.37], [-79.61, -5.37], [-79.61, -5.38]]]}
     with pytest.raises(ZoneError, match="overlap"):
         build_zone_dataset(PIURA, [{"geometry": a}, {"geometry": b}], terrain_fn=fake_terrain)
 
@@ -182,7 +182,7 @@ def test_dem_failure_keeps_slope_unknown():
     def broken(_g):
         raise TerrainUnavailable("no coverage")
 
-    g = {"type": "Polygon", "coordinates": [[[-80.63, -5.21], [-80.6, -5.21], [-80.6, -5.18], [-80.62, -5.185], [-80.63, -5.21]]]}
+    g = {"type": "Polygon", "coordinates": [[[-79.615, -5.38], [-79.605, -5.38], [-79.605, -5.37], [-79.612, -5.372], [-79.615, -5.38]]]}
     out = build_zone_dataset(PIURA, [{"geometry": g}], terrain_fn=broken)
     q = out["sectors"]["features"][0]["properties"]["slope_percent"]
     assert q["value"] is None and q["evidence_class"] == "unknown"
@@ -205,7 +205,8 @@ def test_concurrent_requests_render_a_tile_once(monkeypatch, tmp_path):
         return b"png"
 
     monkeypatch.setattr(T, "_render_tile", fake_render)
-    z, x, y = 9, 140, 263
+    z = 12
+    x, y = lonlat_to_tile(-79.605, -5.375, z)
     results = []
     threads = [threading.Thread(target=lambda: results.append(T.terrain_tile_png(z, x, y))) for _ in range(8)]
     for t in threads:

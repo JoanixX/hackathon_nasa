@@ -1,5 +1,7 @@
 # ADR 0004 — Demand-driven map loading and regional delivery roadmap
 
+> Historical decision record. [ADR 0006](0006-ayumi-bounded-workflow-and-municipal-report.md) supersedes regional navigation, persistent settings, report delivery and sampling policy where they differ. The current public name is Ayumi; original decisions and their evidence are retained below.
+
 - Date: November 15, 2026.
 - Status: implementation tuning accepted within the owner's explicit performance-fix request. Regional packaging and richer mesh assets remain proposed follow-up work, subject to feasibility evidence.
 - Amends ADR 0002 and ADR 0003. No new runtime dependency, renderer migration, public deployment or paid service is selected here.

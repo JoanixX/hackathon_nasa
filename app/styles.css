@@ -181,3 +181,39 @@ td.num, th.num { text-align: right; }
   .map-tools { top: calc(var(--top-h) + 8px); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.seg.wrap { flex-wrap: wrap; }
+
+/* NISAR evidence panel: before/after radar images, class overlay and measurements */
+.nisar-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.nisar-pair figure { margin: 0; }
+.nisar-pair figcaption { font-size: 0.78rem; color: var(--sand-dim); margin-top: 4px; }
+.nisar-img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #0d1114; border-radius: 6px; image-rendering: pixelated; display: block; }
+.nisar-stack { position: relative; }
+.nisar-stack .nisar-img + .nisar-img { position: absolute; inset: 0; background: transparent; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin: 0 2px 0 6px; }
+table.metrics { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 6px 0; }
+table.metrics th, table.metrics td { border-bottom: 1px solid var(--line); padding: 4px 3px; text-align: left; vertical-align: top; }
+@media (max-width: 480px) { .nisar-pair { grid-template-columns: 1fr; } table.metrics { display: block; overflow-x: auto; } }
+
+/* Shared growth + event timeline controls */
+.timeline { margin: 8px 0; }
+.timeline input[type=range] { width: 100%; }
+
+/* Territorial controls reuse the workflow panel; the map keeps its full viewport. */
+.territory-controls { border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.territory-controls > summary { font-weight: 700; cursor: pointer; padding: 8px 0; }
+.territory-controls > label { display: block; margin-top: 8px; font-size: .82rem; }
+.territory-controls > select, .territory-controls > input { width: 100%; min-height: 44px; }
+.territory-places { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.territory-places .btn { min-height: 44px; padding: 6px 9px; }
+.territory-layers { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+.territory-check { display: flex; align-items: center; gap: 7px; min-height: 44px; font-size: .82rem; }
+.territory-check input { accent-color: var(--zone); width: 18px; height: 18px; flex-shrink: 0; }
+.territory-inspect { overflow-wrap: anywhere; border-left: 2px solid var(--sar); padding-left: 8px; }
+@media (max-width: 480px) { .territory-layers { grid-template-columns: 1fr; } }
+
+/* Area overview counters */
+.counters { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+.counter { display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.counter-v { font-size: 1.35rem; font-weight: 800; line-height: 1.1; }
+.counter-l { font-size: 0.75rem; color: var(--sand-dim); }

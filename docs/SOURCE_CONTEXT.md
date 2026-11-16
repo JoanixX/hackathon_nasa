@@ -154,3 +154,30 @@ The owner approved a frontend audit and its recommendations ([ADR 0002](decision
 - **Post-rainfall assessment** uses the actual rainy-season observations that exist: NISAR has no January–April 2026 acquisition over Piura, so the rain event is dated with POWER and compared with Sentinel-1 RTC before/after imagery, clearly labeled C-band; NISAR shows June–October change and later monitoring.
 - **3D twin versus AR.** The twin is the MapLibre DEM terrain view of the same zones and layers; AR is image-tracked tabletop registration with a DEM mesh. Neither is called AR unless the camera registers the target.
 - Every map layer, chart and statement shows its source, date and evidence class; nothing is upsampled or AI-enhanced and presented as finer observation.
+
+## 12. Owner decision — Ponding planting sites, Piura–Tumbes and digital-twin views (November 15, 2026)
+
+Recorded in [ADR 0003](decisions/0003-ponding-sites-piura-tumbes-and-twin-views.md). This amends section 11:
+
+- **Wider purpose.** Satellite and SAR evidence identifies strategic sites where rainwater ponds after the rains. Planted with species that need the least irrigation and fertilizer, those sites become candidate planting sites — not only slopes protected against huaycos.
+- **At most three plant types** per study area; for Piura: algarrobo, sapote and faique, all low water need, each with a declared 3D form.
+- **Region:** Piura and Tumbes, focused on Piura, Sullana, Paita, Talara and Sechura.
+- **Zones** are drawn with a chosen number of vertices, from 4 to 8.
+- **Before/after 3D views:** observed ponding before; planted trees after; a huayco descending a quebrada with the trees and without them. These are illustrative views on real terrain, not hazard models, and the interface does not call them simulations.
+- **Digital twins:** each planted tree, the observed water and the huayco front are drawn in 3D and in AR from the same data.
+- Legend colours are the colours painted on the 2D and 3D map.
+## 13. Performance-first delivery correction (November 15, 2026)
+
+The owner requires a conventional street/building map by default, with water/radar/other analytical visualizations independently switchable. Piura and Tumbes replace the older public Carabayllo selector; Sechura, Piura, Paita, Sullana and Talara receive priority detail. Scope means a planning region, not a claim that rectangular bounds are official administrative boundaries.
+
+[The performance audit](PERFORMANCE_AUDIT.md) and [ADR 0004](decisions/0004-demand-driven-map-loading.md) record measured causes, implemented demand loading and the regional-package/3D plan. Exact individual-tree twins, measured ponding depths, validated vegetation resistance and complete urban 3D AR are open evidence/asset gates. The current per-species procedural shapes and textured AR context must not be described as completing those requirements.
+
+## 14. Owner clarification — NISAR must drive water evidence and planting assessment
+
+The owner clarified that NISAR observations must underpin the surface-water/ponding detection, displayed radar imagery and defensible measurements used to identify potential planting-assessment locations. A conventional basemap, optional radar browse layer or HLS-only water mask does not complete this workflow. Detection is an analysis derived from radar observations with a scale/quality/validation gate; it is not an assumption that every small puddle or planting suitability can be measured directly by NISAR. The [required integration handoff](NISAR_EVIDENCE_INTEGRATION.md) records current gaps and acceptance.
+
+## 15. Owner clarification — working growth/event playback and geographic fidelity
+
+The owner reports that the actual 3D tree growth, huayco and video flow is not working. The owner additionally requires a timeskip with visible growth and event arrival; rejection with an explanation when the selected event start is not a supported quebrada; no planting conflicts with roads, houses or pedestrian circulation; correct NISAR-derived water detection; and accurate, textured parks, buildings, roads and water in 2D/3D/AR. Existing buildings must not be invented or omitted merely to meet a visual density target.
+
+These are pending acceptance requirements detailed as NV-01 through NV-07 in [the integration plan](NISAR_EVIDENCE_INTEGRATION.md), with ordered delivery and actual user-flow/video/geographic checks. Source/codec probes do not override the reported end-to-end failure. Preserve NISAR's required analytical role while using terrain, hydrography and suitably detailed reference geometry for ravines and infrastructure; unknown evidence must not become a false positive or an unsupported definitive rejection. This amendment records requirements, not a claim of implemented fixes or a new scientific result.

@@ -1,5 +1,7 @@
 # NISAR evidence integration: current state and required delivery
 
+> Current baseline — November 15, 2026 (Lima): **Ayumi** is the locally runnable product. > Work is limited to small residential–ravine/mountain screening windows around Canchaque, El Faique and Huancabamba; the whole Piura department and Tumbes are not offered. > Windows are locators, not official hazard boundaries or planting approvals. See [current implementation status](IMPLEMENTATION_STATUS.md) and [ADR 0006](decisions/0006-ayumi-bounded-workflow-and-municipal-report.md).
+
 Date: November 15, 2026. Status: code/runtime audit and implementation handoff; the missing scientific workflow is not implemented by this document. This gate is mandatory under the owner's clarification and belongs alongside performance work, before claiming an end-to-end NISAR-informed planting decision.
 
 ## Product requirement

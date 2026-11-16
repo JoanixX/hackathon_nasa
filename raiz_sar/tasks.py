@@ -179,3 +179,35 @@ def sar_discover_job(inputs: dict[str, Any]) -> str:
     import hashlib
 
     return write_artifact("sar_discovery", hashlib.sha256(name.encode()).hexdigest()[:16], out)
+
+
+@handler("ponding")
+def ponding_job(inputs: dict[str, Any]) -> str:
+    """DSWx-HLS water polygons for an area/date, built off the API processes (shared upstream slots)."""
+    from .sources import SourceUnavailable, ponding_sites
+    from .upstream import UpstreamError
+
+    try:
+        result = ponding_sites(tuple(inputs["bounds"]), inputs["date"])
+    except ValueError as exc:
+        raise JobFailure("invalid_input", str(exc)) from exc
+    except (SourceUnavailable, UpstreamError) as exc:
+        raise JobFailure("source_unavailable", str(exc)) from exc
+    import hashlib
+
+    key = hashlib.sha256(json.dumps([inputs["bounds"], inputs["date"]]).encode()).hexdigest()[:16]
+    return write_artifact("ponding", f"{inputs['date']}-{key}", result)
+
+@handler("nisar_water")
+def nisar_water_job(inputs: dict[str, Any]) -> str:
+    """NISAR GCOV water/change evidence for an area (windowed range reads, calibration, classes, measurements)."""
+    from .nisar_evidence import EvidenceError, build
+    from .upstream import UpstreamError
+
+    try:
+        result = build(inputs["aoi"], inputs.get("event_date"), inputs.get("zones") or [])
+    except EvidenceError as exc:
+        raise JobFailure(exc.code, str(exc)) from exc
+    except UpstreamError as exc:
+        raise JobFailure("source_unavailable", str(exc)) from exc
+    return f"nisar_water/{result['run_id']}/evidence.json"

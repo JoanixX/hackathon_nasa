@@ -11,9 +11,10 @@ test("hidden/reduced-motion views never schedule effects; software profiles stay
   fc.assert(fc.property(fc.boolean(),fc.boolean(),fc.boolean(),fc.boolean(),fc.double({min:.25,max:4,noNaN:true}),fc.constantFrom(.5,.75,1,null),(software,reduced,visible,animate,ratio,quality)=>{
     const p=renderPolicy({software,reduced,visible,animate,ratio,quality});
     assert.ok(p.pixelRatio>=ratio*.5&&p.pixelRatio<=ratio);
-    if(reduced||!visible||!animate)assert.equal(p.fps,0);
-    else assert.ok(p.fps>0&&p.fps<=(software?1:24));
+    if(reduced||!visible||!animate||software)assert.equal(p.fps,0);
+    else assert.ok(p.fps>0&&p.fps<=24);
     if(quality===null&&software)assert.equal(p.pixelRatio,ratio*.5);
+    if(quality===null&&!software)assert.equal(p.pixelRatio,ratio);
   }),runs(2000,15));
 });
 

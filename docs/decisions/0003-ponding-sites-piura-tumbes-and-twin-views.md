@@ -1,5 +1,7 @@
 # ADR 0003 — Ponding sites, Piura–Tumbes focus, digital-twin views and performance logging
 
+> Historical decision record. [ADR 0006](0006-ayumi-bounded-workflow-and-municipal-report.md) supersedes regional navigation, persistent settings, report delivery and sampling policy where they differ. The current public name is Ayumi; original decisions and their evidence are retained below.
+
 **Status:** Accepted by the owner, November 15, 2026. **Amends:** [ADR 0002](0002-map-first-frontend-and-real-data.md) and [SOURCE_CONTEXT](../SOURCE_CONTEXT.md) §12.
 
 ## Context

@@ -1,5 +1,7 @@
 # ADR 0005 — Integrate a bounded Piura territorial viewer into MapLibre
 
+> Historical decision record. [ADR 0006](0006-ayumi-bounded-workflow-and-municipal-report.md) supersedes regional navigation, persistent settings, report delivery and sampling policy where they differ. The current public name is Ayumi; original decisions and their evidence are retained below.
+
 - Status: accepted for this local implementation; geographic, device and performance acceptance remain separate.
 - Owner request: the attached Piura 1:1 digital-twin specification; later explicit approval to use the available geospatial/research/QA skills instead of the three unavailable named skills.
 - Research date: November 15, 2026, America/Lima.
@@ -32,7 +34,7 @@ Terrain uses MapLibre's native tile LOD, depth, normals, interpolation and seams
 
 Bound procedural trees by visible forest/park polygons, full crown clearance from loaded mapped infrastructure/water, candidate/vertex/feature/instance budgets and zoom tiers. These are illustrative trees, not a planting plan or real tree inventory. Waterway ripples use per-segment downstream orientation from the DSM when the height difference supports a direction; flat segments have standing ripples. Width defaults and the small rendering offset are visual choices, not channel/depth measurements.
 
-WebGL2 detail has at most three draw calls (instanced vegetation, batched waterway strips, bounded-opacity visual rain) and explicitly releases buffers, programs and vertex arrays. Animation is opt-in, respects reduced motion and stops while the document is hidden. Terrain/mapping stay usable if custom detail is unavailable. This is an accessibility/graphics fallback, not acceptance of the separate mandatory physical AR gate.
+WebGL2 detail has at most three draw calls (instanced vegetation, batched waterway strips, bounded-opacity visual rain) and explicitly releases buffers, programs and vertex arrays. Hardware animation is opt-in, respects reduced motion and stops while the document is hidden. Repeated software-renderer stalls justified a detected-software fallback with half resolution and static weather. This does not establish regional performance or acceptance of the separate mandatory physical AR gate.
 
 The no-dependency choice reduces supply-chain, download and integration surface, but makes shader/lifecycle maintenance our responsibility. It does not provide photogrammetry, physically based hydraulic modelling, cascaded shadows, ambient occlusion, geoid conversion or individually verified tree positions. Mercator display is regional and conformal, with per-position metre scaling; it is not a global ellipsoidal digital twin. Geodesic measurements and UTM analysis stay in the existing backend.
 

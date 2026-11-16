@@ -1,4 +1,6 @@
-# RAÍZ-SAR AI — Scope and validation contract
+# Ayumi — Scope and validation contract
+
+> Current baseline — November 15, 2026 (Lima): **Ayumi** is the locally runnable product. > Work is limited to small residential–ravine/mountain screening windows around Canchaque, El Faique and Huancabamba; the whole Piura department and Tumbes are not offered. > Windows are locators, not official hazard boundaries or planting approvals. See [current implementation status](IMPLEMENTATION_STATUS.md) and [ADR 0006](decisions/0006-ayumi-bounded-workflow-and-municipal-report.md).
 
 Current scope follows the latest [solution source](SOURCE_CONTEXT.md), including the owner's four binding corrections. Prepared November 14, 2026. This is a specification and research setup, not an implemented application.
 

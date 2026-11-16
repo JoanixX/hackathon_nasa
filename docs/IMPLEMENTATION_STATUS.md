@@ -1,5 +1,11 @@
 # RAÍZ-SAR AI — Implementation status and acceptance evidence
 
+## Piura territorial extension — November 15, 2026
+
+Added an opt-in territorial viewer to the existing map: preserve regional framing, ×1 default DEM geometry, metre-height building LOD, cover-aware material ordering, source-aware coordinate/elevation inspection, bounded instanced illustrative vegetation, batched visual waterway ripples, visual atmosphere controls and explicit GPU lifecycle management. [ADR 0005](decisions/0005-piura-territorial-view.md) and the [delivery/verification report](PIURA_DIGITAL_TWIN.md) contain sources, commands and separate real-data/fixture/performance gates. Existing scientific, physical AR, exact-asset and video gates are not closed by these additions.
+
+The shared checkout gained an independently edited eager `overview.js` during validation. Full-app and overview-isolated browser results must remain distinct. A source package with three real Andean tiles was generated and audited. Python API/terrain/zone regression passed 41 tests; JavaScript campaigns and remaining browser outcomes are detailed in the report. Regional software-renderer loading and interaction stalls remain material limitations; no 60/30 FPS claim is made.
+
 **Date:** November 14, 2026 (America/Lima). **Scope:** first runnable implementation of the selected stack. Everything below distinguishes what was executed from what remains blocked. Software tests are not ecological, geotechnical or user validation.
 
 ## Map-first refactor (ADR 0002) — November 15, 2026
@@ -111,7 +117,15 @@ Final run: `python -m pytest tests --hypothesis-show-statistics` in the target i
 
 ## Known limitations
 
-- No DEM is ingested: the AR terrain is a flat reference plane and slopes are placeholders unless imported.
+- Copernicus DEM now feeds map terrain, slope and AR relief. Exact geotechnical outcomes and surveyed building/tree models remain unvalidated.
 - The GCOV `mask` semantics (0 and 255 invalid) follow the product layout used by the reader and must be rechecked against a real product.
-- Tailwind runs from the development browser CDN; compile CSS before any production delivery. CDN asset hashes are not yet pinned with SRI.
+- The current frontend uses local CSS and lazy pinned CDN tools. CDN asset hashes are not yet pinned with SRI.
 - SQLite and the single-host queue are pilot choices; see the stack document for the graduation path.
+
+## Performance-first audit — November 15, 2026
+
+See [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) for measured causes, exact test budgets and staged follow-up. Three baseline loads had median first idle 20.727 s; three final cold-browser/warm-server loads had median 5.568 s. Default startup now requests no DEM, GIBS image or source-catalog data. All six priority centres, optional shading/waterway controls, 4–8 vertex drawing, 3D enablement/building colours and mobile overflow passed the dedicated browser session.
+
+The current public scenario is Piura and Tumbes; the old Carabayllo scenario is an unlisted fixture. Default analytical layers are Off. Full urban AR geometry, exact individual trees, field water depths and vegetation resistance, physical-device AR, target-device FPS and regional offline delivery are still open gates. Older tables describing both public selectors or full 3D/AR coherence must be read with these corrections. No paid inference was requested in this audit.
+
+The added visual tests exposed a WebM export regression: repeated headless recordings can produce zero-byte files. Empty output is now rejected and logged; export is not marked complete. See the audit for capture/codec experiments and the target-browser/worker-encoding follow-up. Before/after camera framing and conditional legends were corrected after screenshot review.

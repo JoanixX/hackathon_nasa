@@ -26,6 +26,7 @@ os.environ.setdefault("RAIZ_AI_PROVIDER", "fixture")
 os.environ.setdefault("RAIZ_RUNTIME_DIR", "/tmp/raiz-fuzz")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from raiz_sar.api import ClientPerf  # noqa: E402
 from raiz_sar.contracts import AIReportSections, PlanRequest  # noqa: E402
 from raiz_sar.gis_import import ImportErrorReport, normalize_feature_collection  # noqa: E402
 from raiz_sar.plans import PlanInputError, build_plan, resolve_dataset  # noqa: E402
@@ -161,6 +162,20 @@ def t_plan(data: bytes):
     assert plan.budget.total_cost_cents >= 0
 
 
+def t_perf(data: bytes):
+    try:
+        out = ClientPerf.model_validate_json(data)
+    except ValueError:
+        return
+    import math
+
+    assert len(out.events) <= 200
+    for event in out.events:
+        assert math.isfinite(event.ms) and 0 <= event.ms <= 604800000
+        if event.duration_ms is not None:
+            assert math.isfinite(event.duration_ms) and 0 <= event.duration_ms <= 604800000
+
+
 def seeds():
     gis = json.dumps({"type": "FeatureCollection", "features": [{"type": "Feature", "id": "A", "geometry": {"type": "Polygon",
           "coordinates": [[[-77.02, -11.84], [-77.01, -11.84], [-77.01, -11.83], [-77.02, -11.84]]]},
@@ -169,7 +184,8 @@ def seeds():
     report = json.dumps({"executive_summary": "x", "field_checks": ["a"], "monitoring_protocol": ["b"], "risks_and_limitations": ["c"]}).encode()
     ds = get_scenario("lower-piura-sechura")["summary"]["dataset_version"]
     plan = json.dumps({"scenario_id": "lower-piura-sechura", "dataset_version": ds, "budget_pen": 9000}).encode()
-    return {"gis": (t_gis, [gis]), "scene": (t_scene, [scene]), "report": (t_report, [report]), "plan": (t_plan, [plan])}
+    telemetry = json.dumps({"session_id": "fuzz-session", "events": [{"name": "api.request", "ms": 8000, "duration_ms": 30, "detail": "local"}]}).encode()
+    return {"perf": (t_perf, [telemetry]), "gis": (t_gis, [gis]), "scene": (t_scene, [scene]), "report": (t_report, [report]), "plan": (t_plan, [plan])}
 
 
 def run(iterations: int, seed: int) -> dict:

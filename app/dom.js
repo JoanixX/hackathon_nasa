@@ -16,7 +16,7 @@ export function el(tag, attrs, ...children) {
 
 const BADGE = { observed: ["b-observed", "observed"], derived: ["b-derived", "derived"], modeled: ["b-modeled", "modeled"],
   ai_generated: ["b-ai", "AI-generated"], illustrative: ["b-illustrative", "illustrative"], unknown: ["b-unknown", "unknown"],
-  simulated: ["b-sim", "simulated"], fixture: ["b-sim", "synthetic demo"] };
+  simulated: ["b-sim", "illustrative"], fixture: ["b-sim", "synthetic demo"] };
 
 export function badge(cls) {
   const [c, t] = BADGE[cls] || ["b-unknown", cls];
